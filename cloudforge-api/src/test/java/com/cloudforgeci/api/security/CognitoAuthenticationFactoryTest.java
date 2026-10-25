@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -511,10 +512,8 @@ class CognitoAuthenticationFactoryTest {
         cfcContext.put("cognitoDomainPrefix", "test-no-cr-auth");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         CognitoAuthenticationFactory factory = new CognitoAuthenticationFactory(stack, "Cognito");
         factory.create();

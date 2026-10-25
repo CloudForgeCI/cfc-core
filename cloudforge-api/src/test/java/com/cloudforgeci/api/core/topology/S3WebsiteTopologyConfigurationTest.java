@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -74,10 +75,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteRules", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -95,10 +94,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteBasic", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -115,10 +112,8 @@ class S3WebsiteTopologyConfigurationTest {
         context.put("fqdn", "www.example.com");
         Stack stack = createTestStack(app, "TestS3WebsiteCloudFront", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -136,10 +131,8 @@ class S3WebsiteTopologyConfigurationTest {
         context.put("fqdn", "www.example.com");
         Stack stack = createTestStack(app, "TestS3WebsiteSsl", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -177,10 +170,8 @@ class S3WebsiteTopologyConfigurationTest {
         context.put("subdomain", "www");
         Stack stack = createTestStack(app, "TestS3WebsiteSubdomain", SecurityProfile.DEV, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -226,10 +217,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteMultiWire", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -247,10 +236,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteProduction", SecurityProfile.PRODUCTION, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -264,10 +251,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteStaging", SecurityProfile.STAGING, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -281,10 +266,8 @@ class S3WebsiteTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteDev", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -301,10 +284,8 @@ class S3WebsiteTopologyConfigurationTest {
         context.put("fqdn", "website.example.com");
         Stack stack = createTestStack(app, "TestS3WebsiteCfFqdn", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 
@@ -321,10 +302,8 @@ class S3WebsiteTopologyConfigurationTest {
         context.put("subdomain", "www");
         Stack stack = createTestStack(app, "TestS3WebsiteCfSubdomain", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         S3WebsiteTopologyConfiguration config = new S3WebsiteTopologyConfiguration();
 

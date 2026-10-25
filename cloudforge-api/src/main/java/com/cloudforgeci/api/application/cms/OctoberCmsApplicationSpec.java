@@ -51,23 +51,17 @@ import java.util.Map;
     websiteUrl = "https://octobercms.com",
     defaultImage = "php:8.2-fpm-alpine"
 )
-public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
+public class OctoberCmsApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "october-cms";
     // The -apache image bundles Apache + mod_php and serves port 80. The fpm-alpine variant has no
     // web server (PHP-FPM speaks FastCGI on 9000 only), so the ALB health check on port 80 would
     // never pass. Same approach as the ConcreteCms, Dolphin, MyBB, and PhpBB specs.
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/october";
     protected static final String VOLUME_NAME = "octoberData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "pdo_mysql", "pdo_pgsql", "pdo_sqlite", "gd", "curl", "mbstring",
         "xml", "dom", "zip", "intl", "json", "opcache", "redis",
@@ -77,23 +71,8 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -107,31 +86,11 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/";
-    }
-
-    @Override
     public int defaultHealthCheckGracePeriod() {
         return 180;
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -163,28 +122,8 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public int phpMemoryLimit() {
-        return 256;
-    }
-
-    @Override
     public int phpMaxExecutionTime() {
         return 300;
-    }
-
-    @Override
-    public int phpUploadMaxFilesize() {
-        return 64;
-    }
-
-    @Override
-    public int phpPostMaxSize() {
-        return 64;
-    }
-
-    @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
     }
 
     @Override
@@ -198,11 +137,6 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsCdnIntegration() {
-        return true;
-    }
-
-    @Override
     public List<String> cdnStaticPaths() {
         return List.of(
             "/storage/app/media/*",
@@ -212,28 +146,8 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Laravel native cache
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -244,28 +158,8 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return true;
-    }
-
-    @Override
     public String multisiteMode() {
         return "domain";
-    }
-
-    @Override
-    public String cmsCategory() {
-        return "cms";
-    }
-
-    @Override
-    public String preferredWebServer() {
-        return "nginx";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -289,22 +183,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
             .withDatabaseName("october");
     }
 
-    @Override
-    public int backupRetentionDays() {
-        return 7;
-    }
-
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -326,17 +205,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpUserDataBuilder.installNginx(builder);
         PhpUserDataBuilder.installComposer(builder);
 
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         builder.addCommands(
             "# Install October CMS",
@@ -357,9 +226,7 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'October CMS installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override
@@ -384,11 +251,6 @@ public class OctoberCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new OctoberCmsOidcIntegration();
-    }
-
-    @Override
-    public List<String> getSupportedAuthModes() {
-        return List.of("alb-oidc", "none");
     }
 
     // ========== Path-Based Authentication ==========

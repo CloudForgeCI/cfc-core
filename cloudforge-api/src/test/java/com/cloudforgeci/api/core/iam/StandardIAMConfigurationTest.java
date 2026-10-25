@@ -2,6 +2,7 @@ package com.cloudforgeci.api.core.iam;
 
 import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.interfaces.IAMConfiguration;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
@@ -190,12 +191,8 @@ class StandardIAMConfigurationTest {
 
     @Test
     void testImplementsIAMConfiguration() {
-        // When: Checking interfaces
-        Class<?>[] interfaces = StandardIAMConfiguration.class.getInterfaces();
-
         // Then: Should implement IAMConfiguration
-        assertTrue(java.util.Arrays.stream(interfaces)
-            .anyMatch(i -> i.getSimpleName().equals("IAMConfiguration")));
+        assertTrue(IAMConfiguration.class.isAssignableFrom(StandardIAMConfiguration.class));
     }
 
     @Test

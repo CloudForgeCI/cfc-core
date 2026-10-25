@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Lambda security compliance validation rules.
@@ -76,7 +77,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
             ));
 
             // Check if app-level Lambda is being used
-            boolean lambdaEnabled = getBooleanSetting(ctx, "lambdaEnabled", false);
+            boolean lambdaEnabled = RuleSettings.accessorValue(ctx, "lambdaEnabled", false);
             if (!lambdaEnabled) {
                 // No app-level Lambda in use, skip the remaining (app-Lambda-specific) checks.
                 // LAMBDA-PUBLIC-ACCESS above always passes, so there's nothing to report either way.
@@ -135,7 +136,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
 
         // Lambda VPC deployment - use ComplianceMatrix for network segmentation
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean lambdaInVpc = getBooleanSetting(ctx, "lambdaInVpc", false);
+            boolean lambdaInVpc = RuleSettings.accessorValue(ctx, "lambdaInVpc", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION,
@@ -186,7 +187,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
 
         // Lambda environment variable encryption - use ComplianceMatrix
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean lambdaEnvEncryption = getBooleanSetting(ctx, "lambdaEnvEncryption", false);
+            boolean lambdaEnvEncryption = RuleSettings.accessorValue(ctx, "lambdaEnvEncryption", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST,
@@ -237,7 +238,7 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
 
         // Lambda X-Ray tracing - use ComplianceMatrix for security monitoring
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean xrayTracing = getBooleanSetting(ctx, "lambdaXrayTracing", false);
+            boolean xrayTracing = RuleSettings.accessorValue(ctx, "lambdaXrayTracing", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.SECURITY_MONITORING,
@@ -279,22 +280,17 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
 
         // Lambda dead letter queue - advisory for all frameworks
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean lambdaDlq = getBooleanSetting(ctx, "lambdaDeadLetterQueue", false);
+            boolean lambdaDlq = RuleSettings.accessorValue(ctx, "lambdaDeadLetterQueue", false);
 
-            if (!lambdaDlq) {
-                rules.add(ComplianceRule.fail(
-                    "LAMBDA-DEAD-LETTER-QUEUE",
-                    "Lambda functions should have dead letter queues configured",
-                    "Configure dead letter queues for Lambda functions to capture " +
+            rules.add(ComplianceRule.check(
+                lambdaDlq,
+                "LAMBDA-DEAD-LETTER-QUEUE",
+                "Lambda dead letter queue configured",
+                "Lambda functions should have dead letter queues configured",
+                null,
+                "Configure dead letter queues for Lambda functions to capture " +
                     "failed invocations for troubleshooting and retry. " +
-                    "Set lambdaDeadLetterQueue = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "LAMBDA-DEAD-LETTER-QUEUE",
-                    "Lambda dead letter queue configured"
-                ));
-            }
+                    "Set lambdaDeadLetterQueue = true in deployment context."));
         }
 
         return rules;
@@ -325,19 +321,6 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Dead letter queue
      * configuration is a conditional check with no corresponding matrix control and is not
@@ -354,6 +337,6 @@ public class LambdaSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of("LAMBDA_SECURITY");
+        return ClaimedControls.of(SecurityControl.LAMBDA_SECURITY);
     }
 }

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * GDPR (General Data Protection Regulation) compliance validation.
@@ -170,83 +171,50 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         );
 
         // Art. 25(1): Pseudonymization and encryption - EBS
-        if (!config.isEbsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-EBS-ENCRYPTION",
-                "EBS volumes must be encrypted (GDPR Art. 25(1) & 32(1)(a))",
-                "EbsEncryptionRule",
-                "EBS encryption is disabled. Enable encryption at rest to protect personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-EBS-ENCRYPTION",
-                "EBS volumes must be encrypted (GDPR Art. 25(1) & 32(1)(a))",
-                "EbsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEbsEncryptionEnabled(),
+            "GDPR-EBS-ENCRYPTION",
+            "EBS volumes must be encrypted (GDPR Art. 25(1) & 32(1)(a))",
+            "EBS volumes must be encrypted (GDPR Art. 25(1) & 32(1)(a))",
+            "EbsEncryptionRule",
+            "EBS encryption is disabled. Enable encryption at rest to protect personal data."));
 
         // Art. 25(1): Pseudonymization and encryption - EFS
-        if (!config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-EFS-ENCRYPTION",
-                "EFS encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
-                "EfsEncryptionRule",
-                "EFS encryption at rest is disabled. Enable encryption for file storage containing personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-EFS-ENCRYPTION",
-                "EFS encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
-                "EfsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionAtRestEnabled(),
+            "GDPR-EFS-ENCRYPTION",
+            "EFS encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
+            "EFS encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
+            "EfsEncryptionRule",
+            "EFS encryption at rest is disabled. Enable encryption for file storage containing personal data."));
 
         // Art. 25(1): Pseudonymization and encryption - S3
-        if (!config.isS3EncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-S3-ENCRYPTION",
-                "S3 encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
-                "S3BucketEncryptionRule",
-                "S3 encryption is disabled. Enable encryption for object storage containing personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-S3-ENCRYPTION",
-                "S3 encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
-                "S3BucketEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3EncryptionEnabled(),
+            "GDPR-S3-ENCRYPTION",
+            "S3 encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
+            "S3 encryption required for data protection by design (GDPR Art. 25(1) & 32(1)(a))",
+            "S3BucketEncryptionRule",
+            "S3 encryption is disabled. Enable encryption for object storage containing personal data."));
 
         // Art. 25(2): Data minimization through access controls
-        if (ctx.iamProfile == null) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ACCESS-CONTROL",
-                "Access controls required for data minimization (GDPR Art. 25(2))",
-                "IAMPasswordPolicyRule",
-                "IAM profile not configured. Implement least-privilege access to ensure only necessary data is accessed."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ACCESS-CONTROL",
-                "Access controls required for data minimization (GDPR Art. 25(2))",
-                "IAMPasswordPolicyRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.iamProfile == null),
+            "GDPR-ACCESS-CONTROL",
+            "Access controls required for data minimization (GDPR Art. 25(2))",
+            "Access controls required for data minimization (GDPR Art. 25(2))",
+            "IAMPasswordPolicyRule",
+            "IAM profile not configured. Implement least-privilege access to ensure only necessary data is accessed."));
 
         // Art. 25: Network isolation for data protection
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC
-                && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-NETWORK-ISOLATION",
-                "Private network mode recommended for production systems (GDPR Art. 25(1))",
-                "Network mode is public. Use 'private-with-nat' to implement data protection by design for systems processing personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-NETWORK-ISOLATION",
-                "Private network mode recommended for production systems (GDPR Art. 25(1))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC
+                && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)),
+            "GDPR-NETWORK-ISOLATION",
+            "Private network mode recommended for production systems (GDPR Art. 25(1))",
+            "Private network mode recommended for production systems (GDPR Art. 25(1))",
+            null,
+            "Network mode is public. Use 'private-with-nat' to implement data protection by design for systems processing personal data."));
 
         return rules;
     }
@@ -263,75 +231,47 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         );
 
         // Art. 30(1)(g): Technical and organizational measures - CloudTrail
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-CLOUDTRAIL",
-                "CloudTrail required to maintain records of processing activities (GDPR Art. 30(1))",
-                "CloudTrailEnabledRule",
-                "CloudTrail is disabled. Enable CloudTrail to document all API operations on personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-CLOUDTRAIL",
-                "CloudTrail required to maintain records of processing activities (GDPR Art. 30(1))",
-                "CloudTrailEnabledRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "GDPR-CLOUDTRAIL",
+            "CloudTrail required to maintain records of processing activities (GDPR Art. 30(1))",
+            "CloudTrail required to maintain records of processing activities (GDPR Art. 30(1))",
+            "CloudTrailEnabledRule",
+            "CloudTrail is disabled. Enable CloudTrail to document all API operations on personal data."));
 
         // VPC Flow Logs document network processing
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-FLOW-LOGS",
-                "VPC Flow Logs recommended to document data flows (GDPR Art. 30(1))",
-                "VpcFlowLogsEnabled",
-                "VPC Flow Logs are disabled. Enable Flow Logs to maintain records of network activity."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-FLOW-LOGS",
-                "VPC Flow Logs recommended to document data flows (GDPR Art. 30(1))",
-                "VpcFlowLogsEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "GDPR-FLOW-LOGS",
+            "VPC Flow Logs recommended to document data flows (GDPR Art. 30(1))",
+            "VPC Flow Logs recommended to document data flows (GDPR Art. 30(1))",
+            "VpcFlowLogsEnabled",
+            "VPC Flow Logs are disabled. Enable Flow Logs to maintain records of network activity."));
 
         // Access logs for data processing tracking
-        if (!config.isAlbAccessLoggingEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ALB-LOGGING",
-                "ALB access logging recommended to record data access (GDPR Art. 30(1))",
-                "AlbAccessLogsEnabled",
-                "ALB access logging is disabled. Enable access logs to document requests processing personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ALB-LOGGING",
-                "ALB access logging recommended to record data access (GDPR Art. 30(1))",
-                "AlbAccessLogsEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAlbAccessLoggingEnabled(),
+            "GDPR-ALB-LOGGING",
+            "ALB access logging recommended to record data access (GDPR Art. 30(1))",
+            "ALB access logging recommended to record data access (GDPR Art. 30(1))",
+            "AlbAccessLogsEnabled",
+            "ALB access logging is disabled. Enable access logs to document requests processing personal data."));
 
         // Art. 30(1) & Art. 32(1)(d): Log retention for audit trail and security assessment
         // GDPR doesn't specify exact retention period, but requires adequate retention
         // for maintaining records of processing activities and security monitoring
         // Industry standard: 90 days minimum for security logs (aligns with SOC2 CC7.2)
         var retentionDays = config.getLogRetentionDays();
-        if (!isRetentionSufficient(retentionDays)) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-LOG-RETENTION",
-                "Log retention must be adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
-                "CloudWatchLogGroupRetention",
-                "Log retention must be at least 90 days (THREE_MONTHS) to maintain adequate records of processing activities. Current: " +
+        rules.add(ComplianceRule.check(
+            isRetentionSufficient(retentionDays),
+            "GDPR-LOG-RETENTION",
+            "Log retention adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+            "Log retention must be adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
+            "CloudWatchLogGroupRetention",
+            "Log retention must be at least 90 days (THREE_MONTHS) to maintain adequate records of processing activities. Current: " +
                 retentionDays.toString() + ". " +
                 "GDPR Article 30(1) requires maintaining records of processing activities, and Article 32(1)(d) " +
-                "requires ability to regularly test and evaluate security measures."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-LOG-RETENTION",
-                "Log retention adequate for processing records and security assessment (GDPR Art. 30(1) & 32(1)(d))",
-                "CloudWatchLogGroupRetention"
-            ));
-        }
+                "requires ability to regularly test and evaluate security measures."));
 
         return rules;
     }
@@ -353,81 +293,50 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         );
 
         // Art. 32(1)(a): SSL/TLS must be enabled for encrypted transmission of personal data
-        if (!ctx.cfc.enableSsl()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-SSL-ENCRYPTION",
-                "SSL/TLS must be enabled for data in transit (GDPR Art. 32(1)(a))",
-                "ALBHttpsOnly",
-                "Set enableSsl=true for production GDPR compliance to protect personal data in transit."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-SSL-ENCRYPTION",
-                "SSL/TLS enabled for data in transit (GDPR Art. 32(1)(a))",
-                "ALBHttpsOnly"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            ctx.cfc.enableSsl(),
+            "GDPR-SSL-ENCRYPTION",
+            "SSL/TLS enabled for data in transit (GDPR Art. 32(1)(a))",
+            "SSL/TLS must be enabled for data in transit (GDPR Art. 32(1)(a))",
+            "ALBHttpsOnly",
+            "Set enableSsl=true for production GDPR compliance to protect personal data in transit."));
 
         // Art. 32(1)(a): Encryption of personal data - TLS certificate
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-TLS-ENCRYPTION",
-                "TLS certificate required for data in transit (GDPR Art. 32(1)(a))",
-                "ALBHttpsOnly",
-                "TLS certificate not configured. Configure HTTPS to encrypt transmission of personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-TLS-ENCRYPTION",
-                "TLS certificate configured for data in transit (GDPR Art. 32(1)(a))",
-                "ALBHttpsOnly"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "GDPR-TLS-ENCRYPTION",
+            "TLS certificate configured for data in transit (GDPR Art. 32(1)(a))",
+            "TLS certificate required for data in transit (GDPR Art. 32(1)(a))",
+            "ALBHttpsOnly",
+            "TLS certificate not configured. Configure HTTPS to encrypt transmission of personal data."));
 
         // Art. 32(1)(a): Encryption of personal data - EFS in transit
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-EFS-TRANSIT-ENCRYPTION",
-                "EFS in-transit encryption required (GDPR Art. 32(1)(a))",
-                "EfsEncryptionRule",
-                "EFS in-transit encryption is disabled. Enable TLS for file system access to protect personal data during transmission."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-EFS-TRANSIT-ENCRYPTION",
-                "EFS in-transit encryption required (GDPR Art. 32(1)(a))",
-                "EfsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "GDPR-EFS-TRANSIT-ENCRYPTION",
+            "EFS in-transit encryption required (GDPR Art. 32(1)(a))",
+            "EFS in-transit encryption required (GDPR Art. 32(1)(a))",
+            "EfsEncryptionRule",
+            "EFS in-transit encryption is disabled. Enable TLS for file system access to protect personal data during transmission."));
 
         // Art. 32(1)(b): Confidentiality through access controls
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-AUTHENTICATION",
-                "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
-                "Authentication mode is 'none'. Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to control access to personal data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-AUTHENTICATION",
-                "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "GDPR-AUTHENTICATION",
+            "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
+            "Authentication required to ensure confidentiality (GDPR Art. 32(1)(b))",
+            null,
+            "Authentication mode is 'none'. Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to control access to personal data."));
 
         // Art. 32(1)(b): Integrity through monitoring
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-SECURITY-MONITORING",
-                "Security monitoring required to detect integrity violations (GDPR Art. 32(1)(b))",
-                "Security monitoring is disabled. Enable CloudWatch alarms to monitor for unauthorized access."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-SECURITY-MONITORING",
-                "Security monitoring required to detect integrity violations (GDPR Art. 32(1)(b))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "GDPR-SECURITY-MONITORING",
+            "Security monitoring required to detect integrity violations (GDPR Art. 32(1)(b))",
+            "Security monitoring required to detect integrity violations (GDPR Art. 32(1)(b))",
+            null,
+            "Security monitoring is disabled. Enable CloudWatch alarms to monitor for unauthorized access."));
 
         // Art. 32(1)(c): Backup for availability and resilience
         boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
@@ -495,34 +404,22 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         }
 
         // Art. 33(1): Security monitoring for breach detection
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-BREACH-MONITORING",
-                "Security monitoring required for breach notification capability (GDPR Art. 33(1))",
-                "Security monitoring is disabled. Enable CloudWatch alarms to detect security incidents promptly."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-BREACH-MONITORING",
-                "Security monitoring required for breach notification capability (GDPR Art. 33(1))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "GDPR-BREACH-MONITORING",
+            "Security monitoring required for breach notification capability (GDPR Art. 33(1))",
+            "Security monitoring required for breach notification capability (GDPR Art. 33(1))",
+            null,
+            "Security monitoring is disabled. Enable CloudWatch alarms to detect security incidents promptly."));
 
         // Art. 33: CloudTrail for breach investigation
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-BREACH-INVESTIGATION",
-                "CloudTrail required for breach investigation and documentation (GDPR Art. 33(3))",
-                "CloudTrailEnabledRule",
-                "CloudTrail is disabled. Enable CloudTrail to document the nature of breach and affected data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-BREACH-INVESTIGATION",
-                "CloudTrail required for breach investigation and documentation (GDPR Art. 33(3))",
-                "CloudTrailEnabledRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "GDPR-BREACH-INVESTIGATION",
+            "CloudTrail required for breach investigation and documentation (GDPR Art. 33(3))",
+            "CloudTrail required for breach investigation and documentation (GDPR Art. 33(3))",
+            "CloudTrailEnabledRule",
+            "CloudTrail is disabled. Enable CloudTrail to document the nature of breach and affected data."));
 
         // WAF for preventing breaches
         boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
@@ -589,33 +486,23 @@ public class GdprRules implements FrameworkRules<SystemContext> {
         // for the equivalent production-only checks in Soc2Rules/HipaaRules.
         if (ctx.security == SecurityProfile.PRODUCTION) {
             // Art. 32(1)(a): CloudWatch Logs may contain personal data in application log output.
-            if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "GDPR-Art32-LogEncryption",
-                    "CloudWatch log groups must be encrypted with a customer-managed KMS key (Art. 32(1)(a))",
-                    "Enable cloudWatchLogsKmsEncryptionEnabled."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "GDPR-Art32-LogEncryption",
-                    "CloudWatch log groups encrypted with a customer-managed KMS key (Art. 32(1)(a))"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isCloudWatchLogsKmsEncryptionEnabled(),
+                "GDPR-Art32-LogEncryption",
+                "CloudWatch log groups encrypted with a customer-managed KMS key (Art. 32(1)(a))",
+                "CloudWatch log groups must be encrypted with a customer-managed KMS key (Art. 32(1)(a))",
+                null,
+                "Enable cloudWatchLogsKmsEncryptionEnabled."));
 
             // Art. 32(1)(d): change control -- CloudTrail plus AWS Config together give a record of
             // every change and detect drift from the deployed baseline.
-            if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
-                rules.add(ComplianceRule.pass(
-                    "GDPR-Art32-ChangeManagement",
-                    "Change tracking enabled via CloudTrail and AWS Config (Art. 32(1)(d))"
-                ));
-            } else {
-                rules.add(ComplianceRule.fail(
-                    "GDPR-Art32-ChangeManagement",
-                    "Change control tracking required (Art. 32(1)(d))",
-                    "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isCloudTrailEnabled() && config.isAwsConfigEnabled(),
+                "GDPR-Art32-ChangeManagement",
+                "Change tracking enabled via CloudTrail and AWS Config (Art. 32(1)(d))",
+                "Change control tracking required (Art. 32(1)(d))",
+                null,
+                "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."));
         }
 
         // EC2_IMDSV2 is ADVISORY for GDPR (an access-security measure, not itself an Art. 32
@@ -648,11 +535,11 @@ public class GdprRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ENCRYPTION_AT_REST", "ACCESS_CONTROL", "NETWORK_SEGMENTATION", "AUDIT_LOGGING",
-            "NETWORK_FLOW_LOGS", "LOG_RETENTION", "ENCRYPTION_IN_TRANSIT", "AUTHENTICATION",
-            "SECURITY_MONITORING", "BACKUP_RECOVERY", "VULNERABILITY_MANAGEMENT", "WAF_PROTECTION",
-            "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "CHANGE_MANAGEMENT"
+        return ClaimedControls.of(
+            SecurityControl.ENCRYPTION_AT_REST, SecurityControl.ACCESS_CONTROL, SecurityControl.NETWORK_SEGMENTATION, SecurityControl.AUDIT_LOGGING,
+            SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.LOG_RETENTION, SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.AUTHENTICATION,
+            SecurityControl.SECURITY_MONITORING, SecurityControl.BACKUP_RECOVERY, SecurityControl.VULNERABILITY_MANAGEMENT, SecurityControl.WAF_PROTECTION,
+            SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION, SecurityControl.CHANGE_MANAGEMENT
         );
     }
 

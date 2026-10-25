@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Elastic Load Balancer security compliance validation rules.
@@ -165,36 +166,26 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            if (result == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "ALB-HTTPS-ENFORCEMENT",
-                    "HTTPS/TLS required for load balancer listeners",
-                    "Enable HTTPS listeners with valid SSL certificates. " +
+            rules.add(ComplianceRule.check(
+                !(result == ComplianceMatrix.ValidationResult.FAIL),
+                "ALB-HTTPS-ENFORCEMENT",
+                "HTTPS/TLS configured for load balancer",
+                "HTTPS/TLS required for load balancer listeners",
+                null,
+                "Enable HTTPS listeners with valid SSL certificates. " +
                     "Required for PCI-DSS Req 4.1, HIPAA transmission security. " +
-                    "Configure certificate in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ALB-HTTPS-ENFORCEMENT",
-                    "HTTPS/TLS configured for load balancer"
-                ));
-            }
+                    "Configure certificate in deployment context."));
 
             // TLS 1.2+ SSL policy
-            boolean tls12Policy = getBooleanSetting(ctx, "albTls12Policy", true);
-            if (!tls12Policy) {
-                rules.add(ComplianceRule.fail(
-                    "ALB-TLS-POLICY",
-                    "ALB must use TLS 1.2+ SSL policy",
-                    "Configure ALB listeners with ELBSecurityPolicy-TLS-1-2-2017-01 or newer. " +
-                    "Required for PCI-DSS and security best practices."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ALB-TLS-POLICY",
-                    "ALB TLS 1.2+ SSL policy configured"
-                ));
-            }
+            boolean tls12Policy = RuleSettings.accessorValue(ctx, "albTls12Policy", true);
+            rules.add(ComplianceRule.check(
+                tls12Policy,
+                "ALB-TLS-POLICY",
+                "ALB TLS 1.2+ SSL policy configured",
+                "ALB must use TLS 1.2+ SSL policy",
+                null,
+                "Configure ALB listeners with ELBSecurityPolicy-TLS-1-2-2017-01 or newer. " +
+                    "Required for PCI-DSS and security best practices."));
         }
 
         return rules;
@@ -214,7 +205,7 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
             var profileConfig = ctx.securityProfileConfig.get().orElse(null);
             boolean deletionProtection = profileConfig != null
                 ? profileConfig.isAlbDeletionProtectionEnabled()
-                : getBooleanSetting(ctx, "albDeletionProtection", false);
+                : RuleSettings.accessorValue(ctx, "albDeletionProtection", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
@@ -273,19 +264,14 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            if (result == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "ALB-HIGH-AVAILABILITY",
-                    "Multi-AZ deployment required for " + complianceFrameworks,
-                    "Deploy load balancers across multiple availability zones. " +
-                    "Required for PCI-DSS and business continuity."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ALB-HIGH-AVAILABILITY",
-                    "Multi-AZ load balancer deployment configured"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(result == ComplianceMatrix.ValidationResult.FAIL),
+                "ALB-HIGH-AVAILABILITY",
+                "Multi-AZ load balancer deployment configured",
+                "Multi-AZ deployment required for " + complianceFrameworks,
+                null,
+                "Deploy load balancers across multiple availability zones. " +
+                    "Required for PCI-DSS and business continuity."));
         }
 
         return rules;
@@ -315,19 +301,6 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The ALB TLS 1.2+ SSL policy
      * check is a conditional check but calls no {@code ComplianceMatrix} control directly; it
@@ -336,8 +309,8 @@ public class ElbSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "AUDIT_LOGGING", "ENCRYPTION_IN_TRANSIT", "DELETION_PROTECTION", "HIGH_AVAILABILITY"
+        return ClaimedControls.of(
+            SecurityControl.AUDIT_LOGGING, SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.DELETION_PROTECTION, SecurityControl.HIGH_AVAILABILITY
         );
     }
 }

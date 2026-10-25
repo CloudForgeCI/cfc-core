@@ -80,600 +80,64 @@ public final class ComplianceMatrix {
     }
 
     /**
-     * Security control definitions mapped to framework requirements.
+     * Security control definitions mapped to framework requirements. The descriptions and
+     * mappings are in {@code compliance-matrix.tsv}.
      */
     public enum SecurityControl {
-        ENCRYPTION_AT_REST(
-            "Encryption of data at rest (EBS, EFS, S3)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 3.4 - Render PAN unreadable"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption and Decryption"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Logical and Physical Access Controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Pseudonymization and Encryption"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FEDRAMP", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (data at rest)")
-            )
-        ),
-
-        ENCRYPTION_IN_TRANSIT(
-            "Encryption of data in transit (TLS/SSL, EFS)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 4.1 - Encrypt transmission of cardholder data"),
-                "HIPAA", FrameworkRequirement.required("§164.312(e)(1) - Transmission Security"),
-                "SOC2", FrameworkRequirement.required("CC6.7 - Data Transmission Security"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Encryption of Personal Data"),
-                "NIST", FrameworkRequirement.required("SC-8 - Transmission Confidentiality and Integrity"),
-                "FEDRAMP", FrameworkRequirement.required("SC-8 - Transmission Confidentiality and Integrity"),
-                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (data in transit)")
-            )
-        ),
-
-        HTTPS_STRICT(
-            "HTTPS-only mode (disable HTTP listener when SSL enabled)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 4.1 - Strong cryptography for transmission"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(2)(ii) - Encryption mechanism"),
-                "SOC2", FrameworkRequirement.advisory("CC6.7 - Minimize attack surface"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(a) - State of the art encryption"),
-                "NIST", FrameworkRequirement.required("SC-8(1) - Cryptographic Protection"),
-                "FEDRAMP", FrameworkRequirement.required("SC-8(1) - Cryptographic Protection"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (enforce encrypted transport)")
-            )
-        ),
-
-        NETWORK_SEGMENTATION(
-            "Network segmentation (VPC, private subnets, security groups)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 1.3 - Prohibit direct public access to cardholder data"),
-                "HIPAA", FrameworkRequirement.required("§164.312(e)(1) - Network Controls"),
-                "SOC2", FrameworkRequirement.required("CC6.6 - Network Segmentation"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Confidentiality"),
-                "NIST", FrameworkRequirement.required("SC-7 - Boundary Protection"),
-                "FEDRAMP", FrameworkRequirement.required("SC-7 - Boundary Protection"),
-                "ISO-27001", FrameworkRequirement.required("A.8.22 - Segregation of Networks")
-            )
-        ),
-
-        ACCESS_CONTROL(
-            "Role-based access control (IAM, least privilege)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 7.1 - Limit access by business need to know"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Access Control"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Logical Access Controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Confidentiality"),
-                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement"),
-                "FEDRAMP", FrameworkRequirement.required("AC-3 - Access Enforcement"),
-                "ISO-27001", FrameworkRequirement.required("A.5.15 - Access Control")
-            )
-        ),
-
-        AUTHENTICATION(
-            "User authentication (SSO, OIDC, MFA)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.3 - Multi-factor authentication"),
-                "HIPAA", FrameworkRequirement.required("§164.312(d) - Person or Entity Authentication"),
-                "SOC2", FrameworkRequirement.required("CC6.2 - User Authentication"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Ability to ensure confidentiality"),
-                "NIST", FrameworkRequirement.required("IA-2 - Identification and Authentication"),
-                "FEDRAMP", FrameworkRequirement.required("IA-2 - Identification and Authentication"),
-                "ISO-27001", FrameworkRequirement.required("A.8.5 - Secure Authentication")
-            )
-        ),
-
-        AUDIT_LOGGING(
-            "Audit logging with CloudTrail, VPC Flow Logs, and ALB access logs",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 10.2 - Automated audit trails"),
-                "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit Controls"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - System Monitoring"),
-                "GDPR", FrameworkRequirement.required("Art. 30 - Records of Processing Activities"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events"),
-                "FEDRAMP", FrameworkRequirement.required("AU-2 - Audit Events"),
-                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging")
-            )
-        ),
-
-        LOG_RETENTION(
-            "Long-term log retention (2-6 years)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 10.7 - Retain audit trail for at least one year"),
-                "HIPAA", FrameworkRequirement.required("§164.316(b)(2)(i) - Retain documentation for 6 years"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Log retention for forensic analysis"),
-                "GDPR", FrameworkRequirement.advisory("Art. 30 - Maintain processing records"),
-                "NIST", FrameworkRequirement.required("AU-11 - Audit Record Retention"),
-                "FEDRAMP", FrameworkRequirement.required("AU-11 - Audit Record Retention (3 years)"),
-                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging (retention of log information)")
-            )
-        ),
-
-        SECURITY_MONITORING(
-            "Continuous security monitoring (CloudWatch, AWS Config)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 11.5 - File integrity monitoring"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(D) - Information System Activity Review"),
-                "SOC2", FrameworkRequirement.advisory("CC7.2 - System Monitoring for Anomalies"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Regular testing and evaluation"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
-                "FEDRAMP", FrameworkRequirement.required("CA-7 - Continuous Monitoring"),
-                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities")
-            )
-        ),
-
-        THREAT_DETECTION(
-            "Threat detection system (GuardDuty)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 11.4 - Use intrusion detection/prevention systems"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(D) - Security incident procedures"),
-                "SOC2", FrameworkRequirement.advisory("CC7.2 - Threat Detection"),
-                "GDPR", FrameworkRequirement.advisory("Art. 33(1) - Breach Detection"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
-                "FEDRAMP", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
-                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities (threat detection)")
-            )
-        ),
-
-        SECURITY_HUB(
-            "Centralized security findings (AWS Security Hub)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 11.4 - Centralized monitoring"),
-                "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Centralized security monitoring"),
-                "SOC2", FrameworkRequirement.advisory("CC7.3 - Centralized security monitoring"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Centralized security posture"),
-                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
-                "FEDRAMP", FrameworkRequirement.required("CA-7(4) - Risk Monitoring"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (centralized findings)")
-            )
-        ),
-
-        VULNERABILITY_SCANNING(
-            "Vulnerability scanning (AWS Inspector)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 11.2 - Run internal and external vulnerability scans"),
-                "HIPAA", FrameworkRequirement.advisory("§164.308(a)(8) - Periodic evaluation"),
-                "SOC2", FrameworkRequirement.advisory("CC7.1 - Vulnerability detection"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Regular testing"),
-                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
-                "FEDRAMP", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
-                "ISO-27001", FrameworkRequirement.required("A.8.8 - Management of Technical Vulnerabilities")
-            )
-        ),
-
-        SENSITIVE_DATA_DISCOVERY(
-            "Sensitive data discovery (AWS Macie)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 3 - Cardholder data discovery"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(1)(ii)(A) - PHI identification"),
-                "SOC2", FrameworkRequirement.notApplicable(),
-                "GDPR", FrameworkRequirement.required("Art. 30 - Personal data inventory"),
-                "NIST", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
-                "FEDRAMP", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
-                "ISO-27001", FrameworkRequirement.advisory("A.5.34 - Privacy and Protection of PII")
-            )
-        ),
-
-        WAF_PROTECTION(
-            "Web Application Firewall (AWS WAF)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 6.6 - Public-facing web applications protected"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Transmission security mechanisms"),
-                "SOC2", FrameworkRequirement.required("CC6.6 - Web application protection"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1) - Appropriate security measures"),
-                "NIST", FrameworkRequirement.required("SC-7(11) - Boundary Protection"),
-                "FEDRAMP", FrameworkRequirement.required("SC-7 - Boundary Protection (public-facing)"),
-                "ISO-27001", FrameworkRequirement.required("A.8.26 - Application Security Requirements")
-            )
-        ),
-
-        BACKUP_RECOVERY(
-            "Automated backup and disaster recovery",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 9.5.1 - Store backup media in secure location"),
-                "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data Backup and Storage"),
-                "SOC2", FrameworkRequirement.required("A1.3 - Recovery capabilities"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Restore availability and access"),
-                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup"),
-                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information System Backup"),
-                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup")
-            )
-        ),
-
-        HIGH_AVAILABILITY(
-            "High availability configuration (Multi-AZ, auto-scaling)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 12.10.4 - Provide coverage for critical systems"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(7)(ii)(B) - Disaster recovery plan"),
-                "SOC2", FrameworkRequirement.required("A1.2 - Maintain system availability"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Ensure resilience of systems"),
-                "NIST", FrameworkRequirement.required("CP-2 - Contingency Plan"),
-                "FEDRAMP", FrameworkRequirement.required("CP-10 - System Recovery"),
-                "ISO-27001", FrameworkRequirement.required("A.5.29 - Information Security During Disruption")
-            )
-        ),
-
-        CHANGE_MANAGEMENT(
-            "Infrastructure as Code and change tracking",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 6.4.5 - Implement change control procedures"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(8) - Evaluation of security measures"),
-                "SOC2", FrameworkRequirement.required("CC8.1 - Change Management Process"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Process for regular testing"),
-                "NIST", FrameworkRequirement.required("CM-3 - Configuration Change Control"),
-                "FEDRAMP", FrameworkRequirement.required("CM-3 - Configuration Change Control"),
-                "ISO-27001", FrameworkRequirement.required("A.8.32 - Change Management")
-            )
-        ),
-
-        VULNERABILITY_MANAGEMENT(
-            "Configuration compliance monitoring (AWS Config)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 11.2 - Run internal and external scans"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(8) - Periodic evaluation"),
-                "SOC2", FrameworkRequirement.required("CC7.1 - Vulnerability detection and remediation"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Regular testing and evaluating effectiveness"),
-                "NIST", FrameworkRequirement.required("RA-5 - Vulnerability Scanning"),
-                "FEDRAMP", FrameworkRequirement.required("CM-6 - Configuration Settings"),
-                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management")
-            )
-        ),
-
-        KMS_KEY_ROTATION(
-            "Automatic KMS key rotation (annual)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 3.6.4 - Cryptoperiod rotation"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption key management"),
-                "SOC2", FrameworkRequirement.advisory("CC6.1 - Encryption key rotation"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Key management"),
-                "NIST", FrameworkRequirement.required("SC-12 - Cryptographic Key Management"),
-                "FEDRAMP", FrameworkRequirement.required("SC-12 - Cryptographic Key Management"),
-                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (key management)")
-            )
-        ),
-
-        CERTIFICATE_EXPIRATION_MONITORING(
-            "Certificate expiration monitoring (CloudWatch alarms)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 6.3.3 - Certificate management"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Certificate lifecycle"),
-                "SOC2", FrameworkRequirement.advisory("CC6.7 - Certificate management"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Availability assurance"),
-                "NIST", FrameworkRequirement.advisory("IA-5 - Authenticator Management"),
-                "FEDRAMP", FrameworkRequirement.advisory("IA-5(2) - PKI-based Authentication"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (certificate lifecycle)")
-            )
-        ),
-
-        SECRETS_MANAGER(
-            "Secrets Manager for credentials (databases, API keys)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.2.1 - Strong authentication credentials"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Access credential management"),
-                "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential storage"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Secure credential storage"),
-                "NIST", FrameworkRequirement.required("IA-5 - Authenticator Management"),
-                "FEDRAMP", FrameworkRequirement.required("IA-5 - Authenticator Management"),
-                "ISO-27001", FrameworkRequirement.required("A.5.17 - Authentication Information")
-            )
-        ),
-
-        SECRETS_ROTATION(
-            "Automatic secrets rotation (90 days or less)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.2.4 - Change user passwords at least every 90 days"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(5)(ii)(D) - Password management"),
-                "SOC2", FrameworkRequirement.advisory("CC6.1 - Credential rotation"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Credential lifecycle"),
-                "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication"),
-                "FEDRAMP", FrameworkRequirement.required("IA-5(1) - Password-based Authentication"),
-                "ISO-27001", FrameworkRequirement.advisory("A.5.17 - Authentication Information (rotation)")
-            )
-        ),
-
-        DATABASE_MULTI_AZ(
-            "Database Multi-AZ deployment (RDS, Aurora)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 12.10.4 - Critical system availability"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(7)(ii)(B) - Disaster recovery"),
-                "SOC2", FrameworkRequirement.required("A1.2 - System availability"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - System resilience"),
-                "NIST", FrameworkRequirement.required("CP-6 - Alternate Storage Site"),
-                "FEDRAMP", FrameworkRequirement.required("CP-10 - System Recovery"),
-                "ISO-27001", FrameworkRequirement.required("A.5.29 - Information Security During Disruption (DB availability)")
-            )
-        ),
-
-        DATABASE_PITR(
-            "Database point-in-time recovery (DynamoDB, RDS)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 9.5.1 - Backup and restore capability"),
-                "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data backup and recovery"),
-                "SOC2", FrameworkRequirement.required("A1.3 - Recovery capabilities"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Restore data availability"),
-                "NIST", FrameworkRequirement.required("CP-9 - Information System Backup"),
-                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information System Backup"),
-                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup (point-in-time recovery)")
-            )
-        ),
-
-        NETWORK_FLOW_LOGS(
-            "VPC Flow Logs for network traffic monitoring",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 10.2.2 - Log all network access"),
-                "HIPAA", FrameworkRequirement.required("§164.312(b) - Audit network access"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Network monitoring"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(d) - Network monitoring"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events"),
-                "FEDRAMP", FrameworkRequirement.required("AC-4 - Information Flow Enforcement"),
-                "ISO-27001", FrameworkRequirement.required("A.8.16 - Monitoring Activities (network traffic)")
-            )
-        ),
-
-        AUDIT_MANAGER(
-            "Continuous audit evidence collection (AWS Audit Manager)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 10 - Continuous audit evidence"),
-                "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Audit evidence"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Continuous monitoring and audit evidence"),
-                "GDPR", FrameworkRequirement.advisory("Art. 30 - Documentation of compliance"),
-                "NIST", FrameworkRequirement.required("AU-6 - Audit Review, Analysis, and Reporting"),
-                "FEDRAMP", FrameworkRequirement.advisory("AU-6 - Audit Review, Analysis, and Reporting"),
-                "ISO-27001", FrameworkRequirement.advisory("A.5.35 - Independent Review of Information Security")
-            )
-        ),
-
-        CLOUDWATCH_LOGS_KMS_ENCRYPTION(
-            "KMS encryption for CloudWatch Logs (at-rest encryption)",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 3.4 - Render sensitive data unreadable"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption of PHI logs"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Encryption of audit logs"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Encryption of processing records"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FEDRAMP", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
-                "ISO-27001", FrameworkRequirement.required("A.8.24 - Use of Cryptography (log encryption)")
-            )
-        ),
-
-        CLOUDTRAIL_INSIGHTS(
-            "CloudTrail Insights for anomaly detection in API activity",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 10.6 - Review logs for anomalies"),
-                "HIPAA", FrameworkRequirement.advisory("§164.308(a)(1)(ii)(D) - Activity review"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Anomaly detection in system activity"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Regular testing and evaluation"),
-                "NIST", FrameworkRequirement.required("SI-4 - Information System Monitoring"),
-                "FEDRAMP", FrameworkRequirement.advisory("SI-4 - Information System Monitoring"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (anomaly detection)")
-            )
-        ),
-
-        ROUTE53_QUERY_LOGGING(
-            "Route53 DNS query logging for network visibility",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 10.2 - Log DNS resolution"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(b) - Audit DNS queries"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Network activity monitoring"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Network monitoring"),
-                "NIST", FrameworkRequirement.required("AU-2 - Audit Events including DNS"),
-                "FEDRAMP", FrameworkRequirement.advisory("AU-2 - Audit Events including DNS"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.16 - Monitoring Activities (DNS query visibility)")
-            )
-        ),
-
-        // ==================== Audit Trail Immutability ====================
-        S3_OBJECT_LOCK(
-            "S3 Object Lock for audit trail immutability",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 10.7 - Protect audit trail files"),
-                "HIPAA", FrameworkRequirement.required("§164.312(c)(1) - Data integrity controls"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Audit trail protection"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(d) - Data integrity"),
-                "NIST", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
-                "FEDRAMP", FrameworkRequirement.required("AU-9 - Protection of Audit Information"),
-                "ISO-27001", FrameworkRequirement.required("A.5.33 - Protection of Records")
-            )
-        ),
-
-        // ==================== Root Account Protection ====================
-        ROOT_ACCOUNT_PROTECTION(
-            "Root account MFA and access key protection",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.3 - MFA for administrative access"),
-                "HIPAA", FrameworkRequirement.required("§164.312(d) - Person or Entity Authentication"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Privileged access controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Administrative access security"),
-                "NIST", FrameworkRequirement.required("IA-2(1) - Multi-factor Authentication to Privileged Accounts"),
-                "FEDRAMP", FrameworkRequirement.required("IA-2(1) - MFA for privileged accounts"),
-                "ISO-27001", FrameworkRequirement.required("A.8.2 - Privileged Access Rights")
-            )
-        ),
-
-        // ==================== Credential Rotation ====================
-        CREDENTIAL_ROTATION(
-            "Access key rotation and unused credential management",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.2.4 - Change credentials every 90 days"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(5)(ii)(D) - Password management"),
-                "SOC2", FrameworkRequirement.required("CC6.2 - Credential lifecycle management"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Credential hygiene"),
-                "NIST", FrameworkRequirement.required("IA-5(1) - Password-based Authentication rotation"),
-                "FEDRAMP", FrameworkRequirement.required("IA-5(1) - Authenticator management"),
-                "ISO-27001", FrameworkRequirement.required("A.5.17 - Authentication Information (credential lifecycle)")
-            )
-        ),
-
-        // ==================== Database Access Control ====================
-        DATABASE_ACCESS_CONTROL(
-            "Database public access restriction and IAM authentication",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 1.3 - Prohibit direct public access to databases"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Database access control"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Database access restrictions"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Database confidentiality"),
-                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement for databases"),
-                "FEDRAMP", FrameworkRequirement.required("AC-3 - Database access control"),
-                "ISO-27001", FrameworkRequirement.required("A.8.3 - Information Access Restriction")
-            )
-        ),
-
-        // ==================== Container Security ====================
-        CONTAINER_SECURITY(
-            "EKS cluster endpoint protection and secrets encryption",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 1.3/3.4 - Container network and secrets protection"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Container secrets encryption"),
-                "SOC2", FrameworkRequirement.required("CC6.1/CC6.6 - Container access and network controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - Container data protection"),
-                "NIST", FrameworkRequirement.required("SC-28/AC-3 - Container security controls"),
-                "FEDRAMP", FrameworkRequirement.required("SC-28 - Container secrets protection"),
-                "ISO-27001", FrameworkRequirement.required("A.8.20/A.8.24 - Network Security and Use of Cryptography (containers)")
-            )
-        ),
-
-        // ==================== API Security ====================
-        API_SECURITY(
-            "API Gateway logging, SSL enforcement, and WAF protection",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 4.1/6.6 - API encryption and protection"),
-                "HIPAA", FrameworkRequirement.required("§164.312(e)(1) - API transmission security"),
-                "SOC2", FrameworkRequirement.required("CC6.7 - API security controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - API data protection"),
-                "NIST", FrameworkRequirement.required("SC-8/AU-2 - API security and logging"),
-                "FEDRAMP", FrameworkRequirement.required("SC-8 - API transmission protection"),
-                "ISO-27001", FrameworkRequirement.required("A.8.26 - Application Security Requirements (API)")
-            )
-        ),
-
-        // ==================== CDN Security ====================
-        CDN_SECURITY(
-            "CloudFront HTTPS enforcement and WAF association",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 4.1/6.6 - CDN encryption and WAF"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - CDN transmission security"),
-                "SOC2", FrameworkRequirement.required("CC6.6/CC6.7 - CDN access and data protection"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(a) - CDN data protection"),
-                "NIST", FrameworkRequirement.required("SC-7(11)/SC-8 - CDN boundary and transmission protection"),
-                "FEDRAMP", FrameworkRequirement.required("SC-8 - CDN transmission protection"),
-                "ISO-27001", FrameworkRequirement.required("A.8.24/A.8.26 - Use of Cryptography and Application Security (CDN)")
-            )
-        ),
-
-        // ==================== Instance Metadata Security ====================
-        INSTANCE_METADATA_SECURITY(
-            "EC2 IMDSv2 enforcement for metadata service protection",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 2.2 - Secure system configuration"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(a)(1) - Instance access control"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Secure instance configuration"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Instance security"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FEDRAMP", FrameworkRequirement.required("CM-6 - Configuration Settings"),
-                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management (instance metadata)")
-            )
-        ),
-
-        // ==================== Certificate Management ====================
-        CERTIFICATE_MANAGEMENT(
-            "ACM certificate expiration monitoring and lifecycle management",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Req 6.3.3 - Certificate lifecycle management"),
-                "HIPAA", FrameworkRequirement.advisory("§164.312(e)(1) - Certificate validity"),
-                "SOC2", FrameworkRequirement.required("CC6.7/A1.2 - Certificate availability"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1) - Service availability"),
-                "NIST", FrameworkRequirement.required("IA-5(2) - PKI-based Authentication"),
-                "FEDRAMP", FrameworkRequirement.required("IA-5(2) - Certificate management"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (certificate lifecycle management)")
-            )
-        ),
-
-        // ==================== Lambda Security ====================
-        LAMBDA_SECURITY(
-            "Lambda function public access restriction and VPC configuration",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 1.3/7.1 - Lambda network and access control"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(1) - Lambda access control"),
-                "SOC2", FrameworkRequirement.required("CC6.1/CC6.6 - Lambda access and network controls"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(b) - Lambda function protection"),
-                "NIST", FrameworkRequirement.required("AC-3/SC-7 - Lambda access and boundary protection"),
-                "FEDRAMP", FrameworkRequirement.required("AC-3 - Lambda access enforcement"),
-                "ISO-27001", FrameworkRequirement.required("A.8.3/A.8.20 - Information Access Restriction and Network Security (Lambda)")
-            )
-        ),
-
-        // ==================== RDS Logging ====================
-        DATABASE_LOGGING(
-            "RDS database audit logging and activity monitoring",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 10.2 - Database audit trails"),
-                "HIPAA", FrameworkRequirement.required("§164.312(b) - Database audit controls"),
-                "SOC2", FrameworkRequirement.required("CC7.2 - Database monitoring"),
-                "GDPR", FrameworkRequirement.required("Art. 30 - Database processing records"),
-                "NIST", FrameworkRequirement.required("AU-2 - Database audit events"),
-                "FEDRAMP", FrameworkRequirement.required("AU-2 - Database auditing"),
-                "ISO-27001", FrameworkRequirement.required("A.8.15 - Logging (database activity)")
-            )
-        ),
-
-        // ==================== Deletion Protection ====================
-        DELETION_PROTECTION(
-            "RDS and resource deletion protection for data integrity",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 9.5.1 - Data protection controls"),
-                "HIPAA", FrameworkRequirement.required("§164.310(d)(2)(iii) - Data integrity"),
-                "SOC2", FrameworkRequirement.required("A1.2 - System availability protection"),
-                "GDPR", FrameworkRequirement.required("Art. 32(1)(c) - Data availability"),
-                "NIST", FrameworkRequirement.required("CP-9/SC-28 - Information protection"),
-                "FEDRAMP", FrameworkRequirement.required("CP-9 - Information system backup"),
-                "ISO-27001", FrameworkRequirement.required("A.8.13 - Information Backup (deletion protection)")
-            )
-        ),
-
-        // ==================== SNS KMS Encryption ====================
-        SNS_KMS_ENCRYPTION(
-            "SNS topic encryption with customer-managed KMS keys",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.required("Req 8.2.1 - Data at rest encryption"),
-                "HIPAA", FrameworkRequirement.required("§164.312(a)(2)(iv) - Encryption of ePHI"),
-                "SOC2", FrameworkRequirement.advisory("CC6.1 - Message encryption"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(a) - Encryption of personal data"),
-                "NIST", FrameworkRequirement.required("SC-28 - Protection of Information at Rest"),
-                "FEDRAMP", FrameworkRequirement.required("SC-28 - Information at rest"),
-                "ISO-27001", FrameworkRequirement.advisory("A.8.24 - Use of Cryptography (topic encryption)")
-            )
-        ),
-
-        // ==================== EC2 IMDSv2 ====================
-        EC2_IMDSV2(
-            "EC2 Instance Metadata Service Version 2 (IMDSv2) enforcement",
-            Map.of(
-                "PCI-DSS", FrameworkRequirement.advisory("Defense in depth for instance metadata"),
-                "HIPAA", FrameworkRequirement.required("§164.308(a)(3)(i) - Access controls"),
-                "SOC2", FrameworkRequirement.required("CC6.1 - Instance metadata protection"),
-                "GDPR", FrameworkRequirement.advisory("Art. 32(1)(b) - Access security"),
-                "NIST", FrameworkRequirement.required("AC-3 - Access Enforcement"),
-                "FEDRAMP", FrameworkRequirement.required("AC-3 - Access control enforcement"),
-                "ISO-27001", FrameworkRequirement.required("A.8.9 - Configuration Management (IMDSv2 enforcement)")
-            )
-        );
-
-        private final String description;
-        private final Map<String, FrameworkRequirement> frameworkMappings;
-
-        SecurityControl(String description, Map<String, FrameworkRequirement> frameworkMappings) {
-            this.description = description;
-            this.frameworkMappings = frameworkMappings;
-        }
+        ENCRYPTION_AT_REST,
+        ENCRYPTION_IN_TRANSIT,
+        HTTPS_STRICT,
+        NETWORK_SEGMENTATION,
+        ACCESS_CONTROL,
+        AUTHENTICATION,
+        AUDIT_LOGGING,
+        LOG_RETENTION,
+        SECURITY_MONITORING,
+        THREAT_DETECTION,
+        SECURITY_HUB,
+        VULNERABILITY_SCANNING,
+        SENSITIVE_DATA_DISCOVERY,
+        WAF_PROTECTION,
+        BACKUP_RECOVERY,
+        HIGH_AVAILABILITY,
+        CHANGE_MANAGEMENT,
+        VULNERABILITY_MANAGEMENT,
+        KMS_KEY_ROTATION,
+        CERTIFICATE_EXPIRATION_MONITORING,
+        SECRETS_MANAGER,
+        SECRETS_ROTATION,
+        DATABASE_MULTI_AZ,
+        DATABASE_PITR,
+        NETWORK_FLOW_LOGS,
+        AUDIT_MANAGER,
+        CLOUDWATCH_LOGS_KMS_ENCRYPTION,
+        CLOUDTRAIL_INSIGHTS,
+        ROUTE53_QUERY_LOGGING,
+        S3_OBJECT_LOCK,
+        ROOT_ACCOUNT_PROTECTION,
+        CREDENTIAL_ROTATION,
+        DATABASE_ACCESS_CONTROL,
+        CONTAINER_SECURITY,
+        API_SECURITY,
+        CDN_SECURITY,
+        INSTANCE_METADATA_SECURITY,
+        CERTIFICATE_MANAGEMENT,
+        LAMBDA_SECURITY,
+        DATABASE_LOGGING,
+        DELETION_PROTECTION,
+        SNS_KMS_ENCRYPTION,
+        EC2_IMDSV2;
 
         public String getDescription() {
-            return description;
+            return ComplianceMatrixData.description(this);
         }
 
         public Map<String, FrameworkRequirement> getFrameworkMappings() {
-            return Collections.unmodifiableMap(frameworkMappings);
+            return Collections.unmodifiableMap(ComplianceMatrixData.mappings(this));
         }
 
         public FrameworkRequirement getRequirement(String framework) {
-            return frameworkMappings.getOrDefault(framework, FrameworkRequirement.notApplicable());
+            return ComplianceMatrixData.mappings(this).getOrDefault(framework, FrameworkRequirement.notApplicable());
         }
 
         public RequirementLevel getRequirementLevel(String framework) {

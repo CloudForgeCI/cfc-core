@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.topology;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -75,10 +76,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceFargateRules", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -96,10 +95,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceEc2Rules", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -117,10 +114,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceBasic", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -138,10 +133,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("cpuTargetUtilization", 70);
         Stack stack = createTestStack(app, "TestJenkinsServiceAutoscaling", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -158,10 +151,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("fqdn", "jenkins.example.com");
         Stack stack = createTestStack(app, "TestJenkinsServiceSsl", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -177,10 +168,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("subdomain", "jenkins");
         Stack stack = createTestStack(app, "TestJenkinsServiceSubdomain", SecurityProfile.DEV, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -215,10 +204,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceEc2", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -232,10 +219,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceFargate", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -281,10 +266,8 @@ class JenkinsServiceTopologyConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJenkinsServiceMultiWire", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -306,10 +289,8 @@ class JenkinsServiceTopologyConfigurationTest {
         // cpuTargetUtilization will default to 60
         Stack stack = createTestStack(app, "TestJenkinsServiceDefaultAutoscaling", SecurityProfile.STAGING, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -326,10 +307,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("maxInstanceCapacity", 1);
         Stack stack = createTestStack(app, "TestJenkinsServiceNoAutoscaling", SecurityProfile.DEV, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -346,10 +325,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("subdomain", "jenkins");
         Stack stack = createTestStack(app, "TestJenkinsServiceSslSubdomain", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 
@@ -366,10 +343,8 @@ class JenkinsServiceTopologyConfigurationTest {
         context.put("fqdn", "jenkins.example.com");
         Stack stack = createTestStack(app, "TestJenkinsServiceSslFqdn", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         JenkinsServiceTopologyConfiguration config = new JenkinsServiceTopologyConfiguration();
 

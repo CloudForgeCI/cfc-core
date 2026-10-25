@@ -36,8 +36,12 @@ import software.amazon.awscdk.services.logs.LogGroup;
 import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.certificatemanager.Certificate;
 import software.amazon.awscdk.services.certificatemanager.ICertificate;
+import software.amazon.awscdk.assertions.Template;
 import java.util.HashMap;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test infrastructure builder that creates a complete infrastructure setup
@@ -53,6 +57,38 @@ public class TestInfrastructureBuilder {
     private final SecurityProfile securityProfile;
     private final RuntimeType runtimeType;
     private boolean systemContextCreated = false;
+
+    /**
+     * Builds the minimal infrastructure with a mock certificate, ready for rules to be installed on
+     * {@link #getSystemContext()}.
+     */
+    public static TestInfrastructureBuilder minimalWithCertificate(String stackName, SecurityProfile profile,
+                                                                   RuntimeType runtime, Map<String, Object> context) {
+        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(stackName, profile, runtime, context);
+        builder.createMinimalInfrastructure();
+        builder.createMockCertificate();
+        return builder;
+    }
+
+    /** Synthesizes the builder's stack and asserts that validation rejects it, or accepts it. */
+    public static void assertSynthesis(TestInfrastructureBuilder builder, boolean shouldFail,
+                                       String failMessage, String passMessage) {
+        if (shouldFail) {
+            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()), failMessage);
+        } else {
+            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()), passMessage);
+        }
+    }
+
+    /**
+     * Starts a {@link SystemContext} on a stack whose {@code cfc} context is already set, mapping
+     * the security profile to its IAM profile.
+     */
+    public static SystemContext startSystemContext(Stack stack, TopologyType topology, RuntimeType runtime,
+                                                   SecurityProfile profile) {
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(profile);
+        return SystemContext.start(stack, topology, runtime, profile, iamProfile, DeploymentContext.from(stack));
+    }
 
     public TestInfrastructureBuilder(String stackName, SecurityProfile securityProfile, RuntimeType runtimeType) {
         this.app = new App();

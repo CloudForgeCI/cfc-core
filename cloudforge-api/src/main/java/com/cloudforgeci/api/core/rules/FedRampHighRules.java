@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * FedRAMP High Impact Level compliance validator.
@@ -132,14 +133,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         }
 
         // For High baseline, AWS Config rules should monitor IAM for temporary accounts
-        if (config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-AC-2(2)",
-                "Automated Account Removal - AWS Config enabled for account monitoring"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-AC-2(2)",
-                "Automated Account Removal",
-                "AWS Config required for automated account lifecycle monitoring in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-HIGH-AC-2(2)",
+            "Automated Account Removal - AWS Config enabled for account monitoring",
+            "Automated Account Removal",
+            null,
+            "AWS Config required for automated account lifecycle monitoring in High baseline"));
 
         return rules;
     }
@@ -157,14 +157,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         }
 
         // GuardDuty integration enables detection of high-risk account behavior
-        if (config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-AC-2(13)",
-                "High-Risk Account Monitoring - GuardDuty enabled for anomaly detection"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-AC-2(13)",
-                "High-Risk Account Monitoring",
-                "GuardDuty required for detecting high-risk account behavior in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "FEDRAMP-HIGH-AC-2(13)",
+            "High-Risk Account Monitoring - GuardDuty enabled for anomaly detection",
+            "High-Risk Account Monitoring",
+            null,
+            "GuardDuty required for detecting high-risk account behavior in High baseline"));
 
         return rules;
     }
@@ -182,14 +181,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         }
 
         // Cross-region backup indicates geographic separation
-        if (config.isCrossRegionBackupEnabled()) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-CP-6(1)",
-                "Alternate Site Separation - Cross-region backup configured"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-CP-6(1)",
-                "Alternate Site Separation",
-                "Cross-region backup required for geographic separation in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCrossRegionBackupEnabled(),
+            "FEDRAMP-HIGH-CP-6(1)",
+            "Alternate Site Separation - Cross-region backup configured",
+            "Alternate Site Separation",
+            null,
+            "Cross-region backup required for geographic separation in High baseline"));
 
         return rules;
     }
@@ -239,14 +237,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         boolean hasAutomatedIncidentHandling = config.isGuardDutyEnabled() &&
                                                config.isSecurityMonitoringEnabled();
 
-        if (hasAutomatedIncidentHandling) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-IR-4(1)",
-                "Automated Incident Handling - GuardDuty and Security monitoring enabled"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-IR-4(1)",
-                "Automated Incident Handling",
-                "GuardDuty and Security monitoring required for automated incident handling in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            hasAutomatedIncidentHandling,
+            "FEDRAMP-HIGH-IR-4(1)",
+            "Automated Incident Handling - GuardDuty and Security monitoring enabled",
+            "Automated Incident Handling",
+            null,
+            "GuardDuty and Security monitoring required for automated incident handling in High baseline"));
 
         return rules;
     }
@@ -264,14 +261,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         boolean hasFailSecureNetwork = networkMode != null &&
                                        networkMode != NetworkMode.PUBLIC;
 
-        if (hasFailSecureNetwork) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-SC-7(18)",
-                "Fail Secure - Network configured with private subnets (default deny)"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-SC-7(18)",
-                "Fail Secure",
-                "Private subnet deployment required for fail-secure network configuration in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            hasFailSecureNetwork,
+            "FEDRAMP-HIGH-SC-7(18)",
+            "Fail Secure - Network configured with private subnets (default deny)",
+            "Fail Secure",
+            null,
+            "Private subnet deployment required for fail-secure network configuration in High baseline"));
 
         return rules;
     }
@@ -293,14 +289,13 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
         boolean hasSystemAlerts = config.isGuardDutyEnabled() &&
                                   config.isSecurityMonitoringEnabled();
 
-        if (hasSystemAlerts) {
-            rules.add(ComplianceRule.pass("FEDRAMP-HIGH-SI-4(5)",
-                "System-Generated Alerts - GuardDuty and CloudWatch monitoring enabled"));
-        } else {
-            rules.add(ComplianceRule.fail("FEDRAMP-HIGH-SI-4(5)",
-                "System-Generated Alerts",
-                "GuardDuty and security monitoring required for automated alerts in High baseline"));
-        }
+        rules.add(ComplianceRule.check(
+            hasSystemAlerts,
+            "FEDRAMP-HIGH-SI-4(5)",
+            "System-Generated Alerts - GuardDuty and CloudWatch monitoring enabled",
+            "System-Generated Alerts",
+            null,
+            "GuardDuty and security monitoring required for automated alerts in High baseline"));
 
         return rules;
     }
@@ -314,9 +309,9 @@ public final class FedRampHighRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "VULNERABILITY_MANAGEMENT", "THREAT_DETECTION", "BACKUP_RECOVERY",
-            "HIGH_AVAILABILITY", "SECURITY_MONITORING", "NETWORK_SEGMENTATION"
+        return ClaimedControls.of(
+            SecurityControl.VULNERABILITY_MANAGEMENT, SecurityControl.THREAT_DETECTION, SecurityControl.BACKUP_RECOVERY,
+            SecurityControl.HIGH_AVAILABILITY, SecurityControl.SECURITY_MONITORING, SecurityControl.NETWORK_SEGMENTATION
         );
     }
 }

@@ -15,11 +15,13 @@ import com.cloudforgeci.api.storage.EfsFactory;
 import com.cloudforgeci.api.compute.FargateFactory;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import software.amazon.awscdk.App;
 import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.assertions.Template;
 import software.amazon.awscdk.assertions.Match;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -52,6 +54,44 @@ public class WafFactoryTest {
         stack.getNode().setContext("cfc", cfcContext);
 
         return stack;
+    }
+
+    /** Synthesizes a STAGING Fargate stack with the WAF and its dependencies. */
+    private Template synthWaf(String stackName) {
+        Stack stack = createWafEnabledStack(new App(), stackName);
+        TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
+
+        new VpcFactory(stack, "Vpc").create();
+        new AlbFactory(stack, "Alb").create();
+        new EfsFactory(stack, "Efs").create();
+        new FargateFactory(stack, "Fargate").create();
+        new WafFactory(stack, "Waf").create();
+
+        return Template.fromStack(stack);
+    }
+
+    private static void assertManagedRuleGroup(Template template, String group) {
+        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
+            Map.of("Rules", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                "Name", "AWS-" + group,
+                "Statement", Match.objectLike(Map.of(
+                    "ManagedRuleGroupStatement", Match.objectLike(Map.of(
+                        "VendorName", "AWS",
+                        "Name", group)))))))))));
+    }
+
+    private static void assertExcludedRules(Template template, String group, String... excluded) {
+        List<Object> rules = new ArrayList<>();
+        for (String name : excluded) {
+            rules.add(Match.objectLike(Map.of("Name", name)));
+        }
+        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
+            Map.of("Rules", Match.arrayWith(List.of(Match.objectLike(Map.of(
+                "Name", "AWS-" + group,
+                "Statement", Match.objectLike(Map.of(
+                    "ManagedRuleGroupStatement", Match.objectLike(Map.of(
+                        "ExcludedRules", Match.arrayWith(rules))))))))))));
     }
 
     /**
@@ -191,35 +231,7 @@ public class WafFactoryTest {
     @Test
     @DisplayName("WAF WebACL is created with proper security configuration")
     public void testWafWebAclCreation() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestWafCreation");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        // Create VPC
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        // Create ALB
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        // Create EFS
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        // Create Fargate
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        // Create WAF
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestWafCreation");
 
         // Verify WebACL exists
         template.resourceCountIs("AWS::WAFv2::WebACL", 1);
@@ -252,55 +264,10 @@ public class WafFactoryTest {
     @Test
     @DisplayName("SQL Injection protection is enabled")
     public void testSqlInjectionProtection() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestSQLi");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestSQLi");
 
         // Verify SQLi rule set is included
-        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
-            Map.of(
-                "Rules", Match.arrayWith(
-                    List.of(
-                        Match.objectLike(
-                            Map.of(
-                                "Name", "AWS-AWSManagedRulesSQLiRuleSet",
-                                "Statement", Match.objectLike(
-                                    Map.of(
-                                        "ManagedRuleGroupStatement", Match.objectLike(
-                                            Map.of(
-                                                "VendorName", "AWS",
-                                                "Name", "AWSManagedRulesSQLiRuleSet"
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ));
+        assertManagedRuleGroup(template, "AWSManagedRulesSQLiRuleSet");
     }
 
     /**
@@ -310,55 +277,10 @@ public class WafFactoryTest {
     @Test
     @DisplayName("Linux OS protection (shell injection, path traversal) is enabled")
     public void testLinuxOsProtection() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestLinuxOS");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestLinuxOS");
 
         // Verify Linux rule set is included
-        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
-            Map.of(
-                "Rules", Match.arrayWith(
-                    List.of(
-                        Match.objectLike(
-                            Map.of(
-                                "Name", "AWS-AWSManagedRulesLinuxRuleSet",
-                                "Statement", Match.objectLike(
-                                    Map.of(
-                                        "ManagedRuleGroupStatement", Match.objectLike(
-                                            Map.of(
-                                                "VendorName", "AWS",
-                                                "Name", "AWSManagedRulesLinuxRuleSet"
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ));
+        assertManagedRuleGroup(template, "AWSManagedRulesLinuxRuleSet");
     }
 
     /**
@@ -368,55 +290,10 @@ public class WafFactoryTest {
     @Test
     @DisplayName("Known Bad Inputs protection is enabled")
     public void testKnownBadInputsProtection() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestBadInputs");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestBadInputs");
 
         // Verify Known Bad Inputs rule set is included
-        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
-            Map.of(
-                "Rules", Match.arrayWith(
-                    List.of(
-                        Match.objectLike(
-                            Map.of(
-                                "Name", "AWS-AWSManagedRulesKnownBadInputsRuleSet",
-                                "Statement", Match.objectLike(
-                                    Map.of(
-                                        "ManagedRuleGroupStatement", Match.objectLike(
-                                            Map.of(
-                                                "VendorName", "AWS",
-                                                "Name", "AWSManagedRulesKnownBadInputsRuleSet"
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ));
+        assertManagedRuleGroup(template, "AWSManagedRulesKnownBadInputsRuleSet");
     }
 
     /**
@@ -426,88 +303,13 @@ public class WafFactoryTest {
     @Test
     @DisplayName("Jenkins-specific rule exclusions are configured")
     public void testJenkinsExclusions() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestExclusions");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestExclusions");
 
         // Verify SQLi rule has exclusions for Jenkins (from WafFactory lines 161-164)
-        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
-            Map.of(
-                "Rules", Match.arrayWith(
-                    List.of(
-                        Match.objectLike(
-                            Map.of(
-                                "Name", "AWS-AWSManagedRulesSQLiRuleSet",
-                                "Statement", Match.objectLike(
-                                    Map.of(
-                                        "ManagedRuleGroupStatement", Match.objectLike(
-                                            Map.of(
-                                                "ExcludedRules", Match.arrayWith(
-                                                    List.of(
-                                                        Match.objectLike(Map.of("Name", "SQLi_BODY")),
-                                                        Match.objectLike(Map.of("Name", "SQLi_QUERYARGUMENTS")),
-                                                        Match.objectLike(Map.of("Name", "SQLi_COOKIE"))
-                                                    )
-                                                )
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ));
+        assertExcludedRules(template, "AWSManagedRulesSQLiRuleSet", "SQLi_BODY", "SQLi_QUERYARGUMENTS", "SQLi_COOKIE");
 
         // Verify Known Bad Inputs has Java deserialization exclusions
-        template.hasResourceProperties("AWS::WAFv2::WebACL", Match.objectLike(
-            Map.of(
-                "Rules", Match.arrayWith(
-                    List.of(
-                        Match.objectLike(
-                            Map.of(
-                                "Name", "AWS-AWSManagedRulesKnownBadInputsRuleSet",
-                                "Statement", Match.objectLike(
-                                    Map.of(
-                                        "ManagedRuleGroupStatement", Match.objectLike(
-                                            Map.of(
-                                                "ExcludedRules", Match.arrayWith(
-                                                    List.of(
-                                                        Match.objectLike(Map.of("Name", "JavaDeserializationRCE_BODY"))
-                                                    )
-                                                )
-                                            )
-                                        )
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
-            )
-        ));
+        assertExcludedRules(template, "AWSManagedRulesKnownBadInputsRuleSet", "JavaDeserializationRCE_BODY");
     }
 
     /**
@@ -517,30 +319,7 @@ public class WafFactoryTest {
     @Test
     @DisplayName("WAF WebACL is properly associated with ALB")
     public void testWafAlbAssociation() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestAssociation");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestAssociation");
 
         // Verify WebACL Association exists
         template.resourceCountIs("AWS::WAFv2::WebACLAssociation", 1);
@@ -561,30 +340,7 @@ public class WafFactoryTest {
     @Test
     @DisplayName("WAF provides comprehensive security coverage")
     public void testComprehensiveWafSecurity() {
-        App app = new App();
-        Stack stack = createWafEnabledStack(app, "TestComprehensiveSecurity");
-
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.STAGING, iamProfile, cfc);
-
-        VpcFactory vpcFactory = new VpcFactory(stack, "Vpc");
-        vpcFactory.create();
-
-        AlbFactory albFactory = new AlbFactory(stack, "Alb");
-        albFactory.create();
-
-        EfsFactory efsFactory = new EfsFactory(stack, "Efs");
-        efsFactory.create();
-
-        FargateFactory fargateFactory = new FargateFactory(stack, "Fargate");
-        fargateFactory.create();
-
-        WafFactory wafFactory = new WafFactory(stack, "Waf");
-        wafFactory.create();
-
-        Template template = Template.fromStack(stack);
+        Template template = synthWaf("TestComprehensiveSecurity");
 
         // Verify WAF is created and associated
         template.resourceCountIs("AWS::WAFv2::WebACL", 1);

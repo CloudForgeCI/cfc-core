@@ -44,10 +44,8 @@ class KeyManagementRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestKeyMgmtDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing key management rules
         // Then: Should not throw (advisory for DEV)
@@ -60,10 +58,8 @@ class KeyManagementRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestKeyMgmtProd", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing key management rules
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -85,10 +81,8 @@ class KeyManagementRulesTest {
         cfcContext.put("useCustomerManagedKeys", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing key management rules
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -108,10 +102,8 @@ class KeyManagementRulesTest {
         cfcContext.put("secretRotationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing key management rules
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -124,10 +116,8 @@ class KeyManagementRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestKeyMgmtValidation", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing key management rules
         new KeyManagementRules().install(ctx);
@@ -150,10 +140,8 @@ class KeyManagementRulesTest {
         cfcContext.put("encryptionAtRest", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should use customer-managed keys
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -172,10 +160,8 @@ class KeyManagementRulesTest {
         cfcContext.put("keyRotationSchedule", "365");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable automatic key rotation
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -195,10 +181,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsKeyAdminRole", "arn:aws:iam::123456789012:role/KeyAdmin");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enforce strict key policies
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -218,10 +202,8 @@ class KeyManagementRulesTest {
         cfcContext.put("secretRotationDays", 30);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable automatic secret rotation
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -241,10 +223,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsReplicaRegions", "us-west-2,eu-west-1");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure multi-region keys
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -263,10 +243,8 @@ class KeyManagementRulesTest {
         cfcContext.put("cloudHSMClusterId", "cluster-abc123");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should integrate with CloudHSM
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -285,10 +263,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsKeyAlias", "alias/app-encryption-key");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should use key aliases
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -307,10 +283,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsPendingWindowDays", 30);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure deletion window
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -329,10 +303,8 @@ class KeyManagementRulesTest {
         cfcContext.put("envelopeEncryptionEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should use envelope encryption
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -352,10 +324,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsCloudTrailEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable key usage auditing
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -374,10 +344,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsGrantConstraintsEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enforce grant constraints
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -407,10 +375,8 @@ class KeyManagementRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestKeyManagementIdempotent", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing rules multiple times
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -433,10 +399,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsImportedKeyExpiration", "2025-12-31");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should support imported key material
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -456,10 +420,8 @@ class KeyManagementRulesTest {
         cfcContext.put("ssmKmsKeyArn", "arn:aws:kms:us-east-1:123456789012:key/12345");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should encrypt SSM parameters
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -479,10 +441,8 @@ class KeyManagementRulesTest {
         cfcContext.put("kmsKeyOwner", "security-team");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should tag KMS keys
         assertDoesNotThrow(() -> new KeyManagementRules().install(ctx));
@@ -543,15 +503,11 @@ class KeyManagementRulesTest {
         // STAGING and DEV are advisory only (never fail)
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", kmsRotation=" + kmsRotation +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", kmsRotation=" + kmsRotation +
+                ", customerManagedKeys=" + customerManagedKeys,
+            "Expected validation to pass for: " + profile + ", kmsRotation=" + kmsRotation +
                 ", customerManagedKeys=" + customerManagedKeys);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", kmsRotation=" + kmsRotation +
-                ", customerManagedKeys=" + customerManagedKeys);
-        }
     }
 
     /**
@@ -663,15 +619,11 @@ class KeyManagementRulesTest {
         // STAGING and DEV are advisory only (never fail)
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", secretsManager=" + secretsManager +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", secretsManager=" + secretsManager +
+                ", secretRotation=" + secretRotation,
+            "Expected validation to pass for: " + profile + ", secretsManager=" + secretsManager +
                 ", secretRotation=" + secretRotation);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", secretsManager=" + secretsManager +
-                ", secretRotation=" + secretRotation);
-        }
     }
 
     /**
@@ -771,19 +723,15 @@ class KeyManagementRulesTest {
         // STAGING and DEV are advisory only (never fail)
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", kmsRotation=" + kmsRotation +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", kmsRotation=" + kmsRotation +
+                ", customerManagedKeys=" + customerManagedKeys + ", certExpirationMonitoring=" + certExpirationMonitoring +
+                ", acmAutoRenewal=" + acmAutoRenewal + ", secretsManager=" + secretsManager +
+                ", secretRotation=" + secretRotation,
+            "Expected validation to pass for: " + profile + ", kmsRotation=" + kmsRotation +
                 ", customerManagedKeys=" + customerManagedKeys + ", certExpirationMonitoring=" + certExpirationMonitoring +
                 ", acmAutoRenewal=" + acmAutoRenewal + ", secretsManager=" + secretsManager +
                 ", secretRotation=" + secretRotation);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", kmsRotation=" + kmsRotation +
-                ", customerManagedKeys=" + customerManagedKeys + ", certExpirationMonitoring=" + certExpirationMonitoring +
-                ", acmAutoRenewal=" + acmAutoRenewal + ", secretsManager=" + secretsManager +
-                ", secretRotation=" + secretRotation);
-        }
     }
 
     @ParameterizedTest
@@ -835,13 +783,9 @@ class KeyManagementRulesTest {
         builder.createMinimalInfrastructure();
         new KeyManagementRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected KMS rotation validation to fail for: " + rotationDays + " days");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected KMS rotation validation to pass for: " + rotationDays + " days");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected KMS rotation validation to fail for: " + rotationDays + " days",
+            "Expected KMS rotation validation to pass for: " + rotationDays + " days");
     }
 
     @ParameterizedTest
@@ -892,13 +836,9 @@ class KeyManagementRulesTest {
         builder.createMinimalInfrastructure();
         new KeyManagementRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected cert management validation to fail");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected cert management validation to pass");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected cert management validation to fail",
+            "Expected cert management validation to pass");
     }
 
     @ParameterizedTest
@@ -948,12 +888,8 @@ class KeyManagementRulesTest {
         builder.createMinimalInfrastructure();
         new KeyManagementRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected secrets rotation validation to fail");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected secrets rotation validation to pass");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected secrets rotation validation to fail",
+            "Expected secrets rotation validation to pass");
     }
 }

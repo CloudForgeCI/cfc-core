@@ -56,20 +56,13 @@ import java.util.Map;
     websiteUrl = "https://business.adobe.com/products/magento/magento-commerce.html",
     defaultImage = "magento/magento-cloud-docker-php:8.2-fpm"
 )
-public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
+public class MagentoApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "magento";
     protected static final String DEFAULT_IMAGE = "magento/magento-cloud-docker-php:8.2-fpm";
-    protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/magento";
-    protected static final String VOLUME_NAME = "magentoData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "bcmath", "ctype", "curl", "dom", "fileinfo", "gd", "hash",
         "iconv", "intl", "json", "libxml", "mbstring", "openssl",
@@ -81,43 +74,8 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
     }
 
     @Override
@@ -131,11 +89,6 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -189,11 +142,6 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
-    }
-
-    @Override
     public String s3MediaPlugin() {
         return "magento/module-aws-s3";
     }
@@ -201,11 +149,6 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/pub/media";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -259,28 +202,8 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Native Redis support
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -295,23 +218,8 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return true;
-    }
-
-    @Override
     public String multisiteMode() {
         return "domain"; // Magento uses store views with separate domains
-    }
-
-    @Override
-    public String cmsCategory() {
-        return "ecommerce";
-    }
-
-    @Override
-    public String preferredWebServer() {
-        return "nginx";
     }
 
     @Override
@@ -345,16 +253,6 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -400,17 +298,7 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
         );
 
         // Mount storage
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         // Set permissions
         builder.addCommands(
@@ -429,9 +317,7 @@ public class MagentoApplicationSpec implements CmsSpec, DatabaseSpec {
         );
 
         // Install CloudWatch agent
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override

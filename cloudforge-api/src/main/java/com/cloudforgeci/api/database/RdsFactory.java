@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.database;
 
 import com.cloudforgeci.api.core.SystemContext;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.DatabaseSpec.DatabaseRequirement;
@@ -26,7 +27,6 @@ import software.amazon.awscdk.services.logs.RetentionDays;
 import software.amazon.awscdk.services.rds.*;
 import software.amazon.awscdk.services.secretsmanager.*;
 import software.constructs.Construct;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.ArrayList;
@@ -372,10 +372,8 @@ public class RdsFactory {
         NagSuppressions.addResourceSuppressions(
             databaseSecret,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-SMG4")
-                    .reason("Secret rotation requires Lambda function setup - scheduled for future implementation. Credentials are generated with 32-char password and stored securely in Secrets Manager.")
-                    .build()
+                NagSuppress.of("AwsSolutions-SMG4",
+                    "Secret rotation requires Lambda function setup - scheduled for future implementation. Credentials are generated with 32-char password and stored securely in Secrets Manager.")
             ),
             Boolean.TRUE
         );
@@ -383,14 +381,10 @@ public class RdsFactory {
         NagSuppressions.addResourceSuppressions(
             instance,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-RDS11")
-                    .reason("Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity).")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM4")
-                    .reason("RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
-                    .build()
+                NagSuppress.of("AwsSolutions-RDS11",
+                    "Default database ports (5432/3306) are used intentionally - security is enforced via VPC security groups restricting access to application containers only. Non-standard ports provide minimal security benefit (security through obscurity)."),
+                NagSuppress.of("AwsSolutions-IAM4",
+                    "RDS Enhanced Monitoring requires the AWS managed policy AmazonRDSEnhancedMonitoringRole - this is the AWS-recommended approach for RDS monitoring and cannot be replaced with a customer-managed policy.")
             ),
             Boolean.TRUE
         );

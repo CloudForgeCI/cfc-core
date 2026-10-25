@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.observability.LogsKmsKey;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
@@ -12,7 +13,6 @@ import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.interfaces.ApplicationSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import software.amazon.awscdk.Duration;
@@ -308,13 +308,11 @@ public class Ec2Factory extends BaseFactory {
     NagSuppressions.addResourceSuppressions(
         instanceSg,
         List.of(
-            NagPackSuppression.builder()
-                .id("AwsSolutions-EC23")
-                .reason("EC2 security group requires open ingress for optional service ports " +
+            NagSuppress.of("AwsSolutions-EC23",
+                "EC2 security group requires open ingress for optional service ports " +
                         "(SSH for debugging, JNLP for Jenkins agents, etc.). These ports are " +
                         "explicitly enabled via deployment configuration and are necessary " +
                         "for the application's operational requirements.")
-                .build()
         ),
         Boolean.TRUE
     );
