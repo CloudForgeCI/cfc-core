@@ -100,9 +100,9 @@
     <!-- See the maven-gpg-plugin entry in the release profile for why 3.2.8 is used. -->
     <maven.gpg.plugin.version>3.2.8</maven.gpg.plugin.version>
     <maven.deploy.plugin.version>3.1.1</maven.deploy.plugin.version>
-    <jacoco.plugin.version>0.8.15</jacoco.plugin.version>
-    <cyclonedx.plugin.version>2.9.3</cyclonedx.plugin.version>
-    <owasp.plugin.version>12.1.0</owasp.plugin.version>
+    <jacoco.plugin.version>0.8.13</jacoco.plugin.version>
+    <cyclonedx.plugin.version>2.8.2</cyclonedx.plugin.version>
+    <owasp.plugin.version>13.0.0</owasp.plugin.version>
     <central.publishing.plugin.version>0.12.0</central.publishing.plugin.version>
     <flatten.plugin.version>1.8.0</flatten.plugin.version>
   </properties>
@@ -686,7 +686,7 @@
       <plugin>
         <groupId>org.owasp</groupId>
         <artifactId>dependency-check-maven</artifactId>
-        <version>12.1.0</version>
+        <version>13.0.0</version>
         <configuration>
           <!-- Fail build if CVSS score is 7 or higher (High/Critical) -->
           <failBuildOnCVSS>7</failBuildOnCVSS>
