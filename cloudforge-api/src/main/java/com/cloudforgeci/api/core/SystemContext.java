@@ -168,6 +168,9 @@ public final class SystemContext extends Construct {
   // install instead of stopping at the web installer's manual database-connection step.
   public final Slot<String> autoAdminPasswordSecretArn = new Slot<>();
 
+  /** ARN of the customer-managed KMS key that encrypts the application secrets; unset when they use the AWS-managed key. */
+  public final Slot<String> secretsKmsKeyArn = new Slot<>();
+
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
   // Do not use this field directly - it is managed automatically by CognitoAuthenticationFactory.

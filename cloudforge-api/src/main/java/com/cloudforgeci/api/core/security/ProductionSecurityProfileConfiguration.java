@@ -1235,6 +1235,33 @@ public class ProductionSecurityProfileConfiguration implements SecurityProfileCo
     }
 
     @Override
+    public boolean isSecretsKmsEncryptionEnabled() {
+        if (deploymentContext != null) {
+            ComplianceMode mode = getEffectiveComplianceMode();
+            String frameworks = deploymentContext.complianceFrameworks();
+
+            if (ComplianceMatrix.isControlEnforced(
+                frameworks,
+                mode,
+                ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
+            )) {
+                LOG.info("PRODUCTION profile: secrets KMS encryption enforced by compliance frameworks: " + frameworks);
+                return true;
+            }
+        }
+
+        // Check deployment context override (only if compliance doesn't require it)
+        if (deploymentContext != null && deploymentContext.secretsKmsEncryptionEnabled() != null) {
+            boolean enabled = Boolean.TRUE.equals(deploymentContext.secretsKmsEncryptionEnabled());
+            LOG.info("PRODUCTION profile: Overriding secrets KMS encryption from deployment context: " + enabled);
+            return enabled;
+        }
+
+        // Default: on. The profile does not create a secret under the AWS-managed key.
+        return true;
+    }
+
+    @Override
     public boolean isImdsv2Required() {
         // Check if compliance matrix requires this control
         if (deploymentContext != null) {

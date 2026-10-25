@@ -1842,6 +1842,18 @@ public class DeploymentConfig {
     )
     public Boolean snsKmsEncryptionEnabled = null;
 
+    /**
+     * Encrypt the application's generated secrets (admin password, license key, cipher key) with a
+     * customer-managed KMS key. Null means the security profile decides: on in PRODUCTION and STAGING.
+     */
+    @ConfigField(
+        displayName = "Secrets KMS Encryption",
+        description = "Encrypt generated application secrets with a customer-managed KMS key",
+        category = "security",
+        order = 204
+    )
+    public Boolean secretsKmsEncryptionEnabled = null;
+
     /** Require IMDSv2 on EC2 instances (null = profile default: PRODUCTION/STAGING=true unless the
      *  compliance matrix requires EC2_IMDSV2, DEV=false). ADVISORY for PCI-DSS and GDPR -- this
      *  field is what lets a deployer opt out where the framework doesn't mandate it. */

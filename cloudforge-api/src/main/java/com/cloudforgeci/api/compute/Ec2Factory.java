@@ -234,6 +234,9 @@ public class Ec2Factory extends BaseFactory {
   @SystemContext("autoAdminPasswordSecretArn")
   private String autoAdminPasswordSecretArn;
 
+  @SystemContext("secretsKmsKeyArn")
+  private String secretsKmsKeyArn;
+
   private void createEc2Infrastructure() {
     // Use existing IAM role created by IAM configuration (has CloudWatch Logs permissions)
     if (ec2InstanceRole == null) {
@@ -402,6 +405,16 @@ public class Ec2Factory extends BaseFactory {
       software.amazon.awscdk.services.secretsmanager.Secret
           .fromSecretCompleteArn(this, "AutoAdminPasswordSecretRef", autoAdminPasswordSecretArn)
           .grantRead(ec2InstanceRole);
+      if (secretsKmsKeyArn != null && !secretsKmsKeyArn.isBlank()) {
+        // The secret is encrypted with a customer-managed key, so reading it also needs kms:Decrypt.
+        ec2InstanceRole.addToPrincipalPolicy(
+            PolicyStatement.Builder.create()
+                .sid("AllowDecryptApplicationSecrets")
+                .effect(Effect.ALLOW)
+                .actions(List.of("kms:Decrypt"))
+                .resources(List.of(secretsKmsKeyArn))
+                .build());
+      }
     }
 
     com.cloudforgeci.api.core.Ec2ContextImpl ec2Context = new com.cloudforgeci.api.core.Ec2ContextImpl(

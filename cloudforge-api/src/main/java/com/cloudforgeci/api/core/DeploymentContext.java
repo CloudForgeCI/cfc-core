@@ -321,6 +321,7 @@ public final class DeploymentContext {
     public Boolean rdsDeletionProtectionEnabled() { return config.rdsDeletionProtectionEnabled; }
     public Boolean rdsDatabaseMultiAzEnabled() { return config.rdsDatabaseMultiAzEnabled; }
     public Boolean snsKmsEncryptionEnabled() { return config.snsKmsEncryptionEnabled; }
+    public Boolean secretsKmsEncryptionEnabled() { return config.secretsKmsEncryptionEnabled; }
     public Boolean imdsv2Required() { return config.imdsv2Required; }
 
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }

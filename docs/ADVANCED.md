@@ -190,6 +190,7 @@ The Cognito defaults marked "derived" are filled by the Interactive Deployer whe
 | `enableEncryption` | boolean | `true` | Encryption at rest. |
 | `efsEncryptionInTransitEnabled` | boolean | `true` | TLS for EFS mounts. |
 | `cloudWatchLogsKmsEncryptionEnabled` | boolean | profile decides | Customer-managed KMS keys for log groups. On in PRODUCTION, off in STAGING and DEV, and a framework in ENFORCE mode turns it on. |
+| `secretsKmsEncryptionEnabled` | boolean | profile decides | Encrypts the generated application secrets (admin password, license key, cipher key) with a customer-managed KMS key. On in PRODUCTION and STAGING, off in DEV. |
 | `awsConfigEnabled` | boolean | `false` | AWS Config rules for the selected frameworks. |
 | `createConfigInfrastructure` | boolean | `false` | Create the Config recorder and delivery channel. Only one may exist per account and region. |
 | `cloudTrailEnabled` | boolean | `false` | CloudTrail trail. |
