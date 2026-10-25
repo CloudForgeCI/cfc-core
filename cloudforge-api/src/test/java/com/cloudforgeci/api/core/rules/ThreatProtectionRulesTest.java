@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.cloudforgeci.api.test.DeploymentSynth;
+import java.util.Set;
 
 /**
  * Test suite for ThreatProtectionRules.
@@ -1170,5 +1172,27 @@ class ThreatProtectionRulesTest {
             assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
                 "Expected validation to pass for: " + profile + " " + runtime + " " + frameworks);
         }
+    }
+
+    @Test
+    void advisoryModeReportsTheMissingWafWithoutBlockingTheDeployment() {
+        Map<String, Object> context = DeploymentSynth.baseline("pci-dss");
+        context.put("wafEnabled", false);
+        context.put("complianceMode", "advisory");
+
+        Set<String> blocking = DeploymentSynth.blockingRules(context);
+
+        assertEquals(Set.of(), blocking);
+    }
+
+    @Test
+    void enforceModeBlocksOnTheMissingWafWithThePciDssThreatProtectionRule() {
+        Map<String, Object> context = DeploymentSynth.baseline("pci-dss");
+        context.put("wafEnabled", false);
+
+        Set<String> blocking = DeploymentSynth.blockingRules(context);
+
+        assertTrue(blocking.contains("Web Application Firewall required for PCI-DSS"),
+            "expected the ThreatProtectionRules WAF rule among " + blocking);
     }
 }

@@ -75,6 +75,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
             // Centralized monitoring
             rules.addAll(validateCentralizedMonitoring(ctx));
 
+            // Recommendations never block; a dry run reads them as findings.
+            ComplianceFindingsCollector.record(rules.stream().filter(ComplianceRule::isAdvisory).toList());
+
             // Get all failed rules
             List<ComplianceRule> failedRules = rules.stream()
                 .filter(rule -> !rule.passed())
@@ -164,8 +167,6 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
             // Security Hub standards enabled (advisory - best practice recommendation)
             if (securityHubEnabled) {
-            // Security Hub standards enabled (advisory - best practice recommendation)
-            if (securityHubEnabled) {
                 boolean pciDssStandardEnabled = getBooleanSetting(ctx, "securityHubPciDssEnabled", false);
                 boolean cisStandardEnabled = getBooleanSetting(ctx, "securityHubCisEnabled", false);
                 boolean awsFoundationalEnabled = getBooleanSetting(ctx, "securityHubAwsFoundationalEnabled", true);
@@ -200,7 +201,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                         "Security Hub auto-remediation recommended but not required"
                     ));
                 }
-            }            }
+            }
         } else {
             // For non-production, advisory
             if (securityHubEnabled) {
@@ -348,12 +349,19 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
         // Macie is critical for GDPR and HIPAA compliance
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
-        boolean requiresMacie = complianceFrameworks != null &&
+        ComplianceMode mode = ctx.cfc.complianceMode();
+        boolean requiresMacie = mode != ComplianceMode.DISABLED && complianceFrameworks != null &&
             (complianceFrameworks.toUpperCase().contains("GDPR") ||
              complianceFrameworks.toUpperCase().contains("HIPAA"));
 
         if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && requiresMacie) {
-            if (!macieEnabled) {
+            if (!macieEnabled && mode == ComplianceMode.ADVISORY) {
+                rules.add(ComplianceRule.advisory(
+                    "MACIE-ENABLED",
+                    "Amazon Macie is recommended for GDPR/HIPAA data discovery",
+                    "Set macieEnabled = true in deployment context."
+                ));
+            } else if (!macieEnabled) {
                 rules.add(ComplianceRule.fail(
                     "MACIE-ENABLED",
                     "Amazon Macie required for GDPR/HIPAA data discovery",
@@ -377,7 +385,13 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                 boolean macieAutomatedDiscovery = ctx.cfc.macieAutomatedDiscoveryEnabled() != null ?
                     ctx.cfc.macieAutomatedDiscoveryEnabled() : false;
 
-                if (!macieAutomatedDiscovery) {
+                if (!macieAutomatedDiscovery && mode == ComplianceMode.ADVISORY) {
+                    rules.add(ComplianceRule.advisory(
+                        "MACIE-AUTOMATED-DISCOVERY",
+                        "Automated sensitive data discovery jobs are recommended",
+                        "Set macieAutomatedDiscovery = true when jobs are scheduled."
+                    ));
+                } else if (!macieAutomatedDiscovery) {
                     rules.add(ComplianceRule.fail(
                         "MACIE-AUTOMATED-DISCOVERY",
                         "Automated sensitive data discovery jobs required",

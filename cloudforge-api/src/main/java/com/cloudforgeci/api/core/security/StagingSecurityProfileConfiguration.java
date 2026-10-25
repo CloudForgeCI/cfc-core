@@ -117,7 +117,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.NETWORK_FLOW_LOGS
@@ -149,7 +149,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.SECURITY_MONITORING
@@ -175,7 +175,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.AUDIT_LOGGING
@@ -201,7 +201,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.THREAT_DETECTION
@@ -229,7 +229,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.VULNERABILITY_MANAGEMENT
@@ -254,7 +254,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.AUDIT_MANAGER
@@ -283,7 +283,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
@@ -311,7 +311,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ENCRYPTION_IN_TRANSIT
@@ -332,7 +332,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
@@ -360,7 +360,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
@@ -401,7 +401,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
@@ -442,7 +442,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.WAF_PROTECTION
@@ -469,7 +469,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.HTTPS_STRICT
@@ -510,7 +510,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
@@ -536,7 +536,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
@@ -564,7 +564,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
@@ -599,7 +599,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.AUDIT_LOGGING
@@ -742,7 +742,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.DELETION_PROTECTION
@@ -771,7 +771,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ
@@ -895,7 +895,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.SENSITIVE_DATA_DISCOVERY
@@ -935,7 +935,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.SECURITY_HUB
@@ -963,7 +963,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.VULNERABILITY_SCANNING
@@ -1041,7 +1041,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION
@@ -1068,7 +1068,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.DELETION_PROTECTION
@@ -1088,7 +1088,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.CLOUDTRAIL_INSIGHTS
@@ -1115,7 +1115,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ROUTE53_QUERY_LOGGING
@@ -1142,7 +1142,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.S3_OBJECT_LOCK
@@ -1169,7 +1169,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
             ComplianceMode mode = getEffectiveComplianceMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION

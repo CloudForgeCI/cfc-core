@@ -1716,7 +1716,10 @@ public class DeploymentConfig {
     )
     public Boolean auditManagerServiceEnabled = null;
 
-    /** Enable CloudWatch Logs KMS encryption */
+    /**
+     * Enable CloudWatch Logs KMS encryption. Null means the security profile decides: on in
+     * PRODUCTION, off in STAGING and DEV, and on whenever a framework in ENFORCE mode requires it.
+     */
     @ConfigField(
         displayName = "CloudWatch Logs KMS Encryption",
         description = "Encrypt CloudWatch Logs with customer-managed KMS keys (required for PCI-DSS, HIPAA, SOC2)",
@@ -1724,7 +1727,7 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 170
     )
-    public Boolean cloudWatchLogsKmsEncryptionEnabled = false;
+    public Boolean cloudWatchLogsKmsEncryptionEnabled = null;
 
     /** Enable CloudTrail Insights */
     @ConfigField(

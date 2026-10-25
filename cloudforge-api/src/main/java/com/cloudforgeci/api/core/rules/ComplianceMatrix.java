@@ -1030,6 +1030,28 @@ public final class ComplianceMatrix {
     }
 
     /**
+     * Whether a framework overrides the user's setting for a control. Only ENFORCE overrides: a
+     * control the selected frameworks require is then applied whatever the setting says.
+     * ADVISORY reports the gap without changing the setting, and DISABLED, like selecting no
+     * framework, applies nothing.
+     *
+     * <p>{@link #isControlRequired} answers a different question, whether a framework asks for the
+     * control, which also decides what monitoring is deployed.</p>
+     *
+     * @param frameworksStr Comma-separated list of frameworks (e.g., "PCI-DSS,HIPAA,SOC2")
+     * @param mode Compliance mode (ENFORCE, ADVISORY, or DISABLED)
+     * @param control Security control to check
+     * @return true if the control must be applied regardless of the user's setting
+     */
+    public static boolean isControlEnforced(
+        String frameworksStr,
+        ComplianceMode mode,
+        SecurityControl control
+    ) {
+        return mode == ComplianceMode.ENFORCE && isRequiredByAnyFramework(frameworksStr, control);
+    }
+
+    /**
      * Returns true when any selected framework marks the control as REQUIRED.
      */
     static boolean isRequiredByAnyFramework(String frameworksStr, SecurityControl control) {

@@ -259,14 +259,8 @@ class CloudForgeSynthesizerTest {
         config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.SOC2, ComplianceFrameworkType.HIPAA);
         config.complianceMode = ComplianceMode.ENFORCE;
         config.auditManagerEnabled = false;
-        // AdvancedMonitoringRules ("always load", doesn't itself honor ComplianceMode) hard-blocks
-        // synthesis for PRODUCTION + GDPR/HIPAA without this -- a real, pre-existing gap unrelated
-        // to this test's own purpose, worked around the same way its own error message says to.
-        config.macieEnabled = true;
-        config.macieAutomatedDiscovery = true;
-        // DatabaseSecurityRules is the same kind of "always load" validator that doesn't honor
-        // ComplianceMode -- it hard-blocks PRODUCTION on any failed database check, including this
-        // one, regardless of ADVISORY mode. WordPress provisions a real database, so this fires.
+        // DatabaseSecurityRules checks are profile requirements, so they block PRODUCTION whatever
+        // the compliance mode is. WordPress provisions a database, so this one applies.
         config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
@@ -284,23 +278,25 @@ class CloudForgeSynthesizerTest {
             "caller's original auditManagerEnabled must be restored after the call");
     }
 
-    /** A real, pre-existing gap this method has to defend against: not every validator in this
-     *  codebase honors {@code ComplianceMode} -- {@code AdvancedMonitoringRules} (an "always load"
-     *  cross-framework validator) hard-blocks {@code app.synth()} for a PRODUCTION profile
-     *  requesting GDPR/HIPAA without {@code macieEnabled}, regardless of {@code complianceMode}.
-     *  Proves the dry run surfaces that as {@code error} instead of throwing. */
+    /** A missing Macie setting under GDPR/HIPAA fails a rule in a validator that is loaded for every
+     *  deployment. In ADVISORY mode that rule is reported as a recommendation and does not block
+     *  synthesis, so the dry run completes and returns it among the framework findings. */
     @Test
-    void advisoryDryRunReportsAnErrorRatherThanThrowingWhenAnAlwaysLoadValidatorHardBlocks() {
-        DeploymentConfig config = wordpressFargateConfig("SynthTestDryRunHardBlock");
+    void advisoryDryRunReportsAMissingMacieAsAFindingInsteadOfBlocking() {
+        DeploymentConfig config = wordpressFargateConfig("SynthTestDryRunMacie");
         config.complianceFrameworks = java.util.List.of(ComplianceFrameworkType.HIPAA);
         config.auditManagerEnabled = true;
-        // macieEnabled left false -- deliberately triggers AdvancedMonitoringRules' hard block.
+        // DatabaseSecurityRules checks are profile requirements, so they block PRODUCTION whatever
+        // the compliance mode is. WordPress provisions a database, so this one applies.
+        config.rdsEnhancedMonitoringEnabled = true;
+        // macieEnabled is left false.
 
         CloudForgeSynthesizer.ComplianceCheckResult result =
             CloudForgeSynthesizer.synthesizeAdvisoryDryRun(config, tempDir.resolve("cdk.out"));
 
-        assertTrue(result.error() != null && result.error().contains("Macie"), "expected a Macie error: " + result.error());
-        assertTrue(result.nagFindings().isEmpty(), "cdk-nag never ran since synthesis never completed");
+        assertEquals(null, result.error(), "synthesis should have completed cleanly: " + result.error());
+        assertTrue(result.frameworkFindings().toString().contains("Macie"),
+            "expected the Macie gap among the findings: " + result.frameworkFindings());
     }
 
     /** {@code complianceFrameworksRawOverride} is the escape hatch for tokens with no {@link
@@ -313,9 +309,7 @@ class CloudForgeSynthesizerTest {
         DeploymentConfig config = wordpressFargateConfig("SynthTestDryRunRawOverride");
         config.complianceFrameworksRawOverride = "ISO-27001,AWS-BEST-PRACTICES";
         config.auditManagerEnabled = true;
-        config.macieEnabled = true;
-        config.macieAutomatedDiscovery = true;
-        // Same DatabaseSecurityRules ADVISORY gap as advisoryDryRunNeverThrowsAndReturnsBoth... above.
+        // DatabaseSecurityRules checks are profile requirements, as in the test above.
         config.rdsEnhancedMonitoringEnabled = true;
 
         CloudForgeSynthesizer.ComplianceCheckResult result =

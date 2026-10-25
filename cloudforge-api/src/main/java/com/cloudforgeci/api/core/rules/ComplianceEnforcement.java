@@ -39,6 +39,26 @@ public final class ComplianceEnforcement {
     }
 
     /**
+     * For rule classes that decide blocking themselves rather than through {@link #resolve}: whether
+     * the mode keeps these failures from blocking. ADVISORY records them as findings and DISABLED
+     * drops them, so only ENFORCE lets a failed rule block.
+     *
+     * @param complianceMode the resolved {@link ComplianceMode} for this deployment
+     * @param failedRules the rules that failed
+     * @return true if the failures must not block synthesis
+     */
+    public static boolean reportsOnly(ComplianceMode complianceMode, List<ComplianceRule> failedRules) {
+        if (complianceMode == ComplianceMode.DISABLED) {
+            return true;
+        }
+        if (complianceMode == ComplianceMode.ADVISORY) {
+            ComplianceFindingsCollector.record(failedRules);
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * @param frameworkDisplayName name used in log lines (e.g. "HIPAA", "PCI-DSS", "SOC 2")
      * @param rules every {@link ComplianceRule} the framework's validators produced, pass and fail
      * @param complianceMode the resolved {@link ComplianceMode} for this deployment
@@ -55,6 +75,12 @@ public final class ComplianceEnforcement {
             SecurityProfile profile,
             Set<String> stagingBlockingRules,
             Logger log) {
+
+        // DISABLED switches compliance off: nothing is reported or blocked.
+        if (complianceMode == ComplianceMode.DISABLED) {
+            log.info(frameworkDisplayName + " validation skipped (compliance mode DISABLED)");
+            return List.of();
+        }
 
         List<ComplianceRule> failedRules = rules.stream().filter(rule -> !rule.passed()).toList();
         List<String> errors = failedRules.stream()

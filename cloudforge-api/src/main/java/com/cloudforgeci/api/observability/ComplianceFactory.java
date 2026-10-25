@@ -484,13 +484,12 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
 
-        // Enable KMS encryption for CloudTrail when:
-        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
-        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
+        // Enable KMS encryption for CloudTrail when the security profile resolves
+        // cloudWatchLogsKmsEncryptionEnabled to true: on in PRODUCTION, required by a framework
+        // in ENFORCE mode, or set explicitly.
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
-                || config.isCloudWatchLogsKmsEncryptionEnabled();
+        boolean useKms = config.isCloudWatchLogsKmsEncryptionEnabled();
 
         // Create KMS-encrypted CloudWatch Log Group for CloudTrail (PCI-DSS Req 3.4)
         Key cloudTrailLogsKmsKey = null;
@@ -4519,13 +4518,12 @@ public class ComplianceFactory extends BaseFactory {
         boolean shouldRetain = security == SecurityProfile.PRODUCTION;
         boolean shouldAutoDelete = !shouldRetain;
 
-        // Enable KMS encryption for compliance buckets when:
-        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
-        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
+        // Enable KMS encryption for compliance buckets when the security profile resolves
+        // cloudWatchLogsKmsEncryptionEnabled to true: on in PRODUCTION, required by a framework
+        // in ENFORCE mode, or set explicitly.
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
-                || config.isCloudWatchLogsKmsEncryptionEnabled();
+        boolean useKms = config.isCloudWatchLogsKmsEncryptionEnabled();
 
         // Enable Object Lock for compliance audit buckets when required by compliance matrix
         // HIPAA § 164.312(c)(1) - Data integrity controls

@@ -90,6 +90,10 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
                     return List.of();
                 }
 
+                if (ComplianceEnforcement.reportsOnly(ctx.cfc.complianceMode(), failedRules)) {
+                    return List.of();
+                }
+
                 // For PRODUCTION, only block on actual infrastructure requirements
                 // Advisory recommendations (container scanning, alert config) are non-blocking
                 List<String> blockingRules = failedRules.stream()

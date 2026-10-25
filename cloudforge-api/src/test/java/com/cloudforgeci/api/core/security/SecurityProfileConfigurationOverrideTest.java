@@ -126,7 +126,18 @@ class SecurityProfileConfigurationOverrideTest {
                 .isSnsKmsEncryptionEnabled());
             assertFalse(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("snsKmsEncryptionEnabled", false)))
                 .isSnsKmsEncryptionEnabled());
-            assertFalse(new ProductionSecurityProfileConfiguration(cfcUnset()).isSnsKmsEncryptionEnabled());
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcUnset()).isSnsKmsEncryptionEnabled(),
+                "PRODUCTION does not create an unencrypted topic unless the setting turns it off");
+        }
+
+        @Test
+        void cloudWatchLogsKmsEncryptionEnabledHonorsOverride() {
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("cloudWatchLogsKmsEncryptionEnabled", true)))
+                .isCloudWatchLogsKmsEncryptionEnabled());
+            assertFalse(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("cloudWatchLogsKmsEncryptionEnabled", false)))
+                .isCloudWatchLogsKmsEncryptionEnabled());
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcUnset()).isCloudWatchLogsKmsEncryptionEnabled(),
+                "PRODUCTION default: on");
         }
 
         @Test
