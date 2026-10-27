@@ -16,7 +16,7 @@
     <java.version>25</java.version>
     <!-- Matches cloudforge-api's own aws.sdk.version pin. No central AWS SDK BOM entry exists
          in the root pom yet. Needed for CdkAssetPublisher's S3Client parameter type. -->
-    <aws.sdk.version>2.25.0</aws.sdk.version>
+    <aws.sdk.version>2.57.3</aws.sdk.version>
   </properties>
 
   <scm>
