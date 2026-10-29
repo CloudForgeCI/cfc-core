@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.aggregator.ArgumentsAccessor;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvFileSource;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -643,6 +644,16 @@ class TruthTableValidationTest {
         }
 
         return testCases.stream();
+    }
+
+    /** Runs one CSV matrix row through {@link #testComplianceFrameworkIntegrationCsv}. */
+    private void runMatrixRow(ArgumentsAccessor row) {
+        testComplianceFrameworkIntegrationCsv(
+            row.getString(0), row.getString(1), row.getString(2), row.getString(3),
+            row.getString(4), row.getString(5), row.getString(6), row.getString(7),
+            row.getString(8), row.getString(9), row.getString(10), row.getString(11),
+            row.getString(12), row.getString(13), row.getString(14), row.getString(15),
+            row.getString(16), row.getString(17));
     }
 
     /**
@@ -2281,34 +2292,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 15 tests
@@ -2318,34 +2303,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testHipaaFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 14 tests
@@ -2355,34 +2314,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 14 tests
@@ -2392,34 +2325,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2FargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2FargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 13 tests
@@ -2429,34 +2336,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testHipaaEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 12 tests
@@ -2466,34 +2347,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 12 tests
@@ -2503,79 +2358,19 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 12 tests
 
-    @org.junit.jupiter.api.Disabled("Deadlocks once the full module test suite has run enough prior CDK "
-        + "synths in the shared jsii-kernel fork -- thread dump shows the main thread genuinely blocked "
-        + "(not merely slow) in JsiiRuntime.readNextResponse() inside Template.fromStack(). Same class of "
-        + "issue as the -Xss8m bump on the surefire plugin config and the @Disabled above on "
-        + "testComplianceFrameworkIntegrationCsv; this is the largest single scenario set in the matrix "
-        + "(FARGATE, all 4 frameworks, 12 rows), which is likely why it's the one that tips over. A larger "
-        + "-Xss made no difference, so this isn't a JVM stack-size problem specifically. Re-enable once "
-        + "jsii kernel state accumulation across a long reused-fork run has a real fix.")
     @ParameterizedTest(name = "{0}")
     @CsvFileSource(
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_all_frameworks.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprFargateAllFrameworks(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprFargateAllFrameworks(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 12 tests
@@ -2585,34 +2380,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2Ec2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2Ec2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 12 tests
@@ -2622,34 +2391,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2FargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2FargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 11 tests
@@ -2659,34 +2402,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testHipaaFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 11 tests
@@ -2696,34 +2413,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 10 tests
@@ -2733,34 +2424,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 9 tests
@@ -2770,34 +2435,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testHipaaEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 9 tests
@@ -2807,34 +2446,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 8 tests
@@ -2844,34 +2457,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_all_frameworks.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprEc2AllFrameworks(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprEc2AllFrameworks(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 8 tests
@@ -2881,34 +2468,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2Ec2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2Ec2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 6 tests
@@ -2918,34 +2479,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 6 tests
@@ -2955,34 +2490,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -2992,34 +2501,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr,soc2_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testGdprSoc2FargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprSoc2FargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -3029,34 +2512,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -3066,34 +2523,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -3103,34 +2534,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -3140,34 +2545,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -3177,34 +2556,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3214,34 +2567,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3251,34 +2578,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3288,34 +2589,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3325,34 +2600,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3362,34 +2611,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3399,34 +2622,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3436,34 +2633,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2GdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2GdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3473,34 +2644,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2GdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2GdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3510,34 +2655,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -3547,34 +2666,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3584,34 +2677,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr,soc2_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testGdprSoc2FargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprSoc2FargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3621,34 +2688,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testHipaaGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3658,34 +2699,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testHipaaGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3695,34 +2710,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3732,34 +2721,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3769,34 +2732,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -3806,34 +2743,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -3843,34 +2754,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -3880,34 +2765,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -3917,34 +2776,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -3954,34 +2787,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -3991,34 +2798,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprEc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 1 tests
@@ -4028,34 +2809,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa,gdpr_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaGdprFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaGdprFargatePass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // ========== NEW MULTI-FRAMEWORK VIOLATION TESTS ==========
@@ -4068,34 +2823,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr,soc2_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testGdprSoc2Ec2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprSoc2Ec2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 4 tests
@@ -4105,34 +2834,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/gdpr,soc2_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testGdprSoc2Ec2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testGdprSoc2Ec2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4142,34 +2845,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testHipaaGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4179,34 +2856,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/hipaa,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testHipaaGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testHipaaGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4216,34 +2867,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4253,34 +2878,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4290,34 +2889,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4327,34 +2900,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/pci-dss,hipaa,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testPciDssHipaaGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testPciDssHipaaGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4364,34 +2911,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2GdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2GdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4401,34 +2922,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2GdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2GdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4438,34 +2933,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4475,34 +2944,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,hipaa,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2HipaaGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2HipaaGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4512,34 +2955,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4549,34 +2966,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4586,34 +2977,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,gdpr_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssGdprEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssGdprEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4623,34 +2988,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,gdpr_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssGdprFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssGdprFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4660,34 +2999,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa_ec2_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaEc2Fail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaEc2Fail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // 3 tests
@@ -4697,34 +3010,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/soc2,pci-dss,hipaa_fargate_fail.csv",
         numLinesToSkip = 1
     )
-    void testSoc2PciDssHipaaFargateFail(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testSoc2PciDssHipaaFargateFail(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     // ========== INCIDENTRESPONSE FRAMEWORK TESTS ==========
@@ -4736,39 +3023,17 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/incidentresponse_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testIncidentResponseEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testIncidentResponseEc2Pass(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
 
         System.out.println("\n[INCIDENTRESPONSE TEST] EC2 Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
         System.out.println("   Focus: Log retention for incident investigation, flow logs for network forensics");
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -4777,39 +3042,17 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/incidentresponse_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testIncidentResponseFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testIncidentResponseFargatePass(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
 
         System.out.println("\n[INCIDENTRESPONSE TEST] Fargate Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   Log Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default (730)"));
         System.out.println("   Focus: Log retention for incident investigation, flow logs for network forensics");
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== ADVANCEDMONITORING FRAMEWORK TESTS ==========
@@ -4821,25 +3064,11 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/advancedmonitoring_ec2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAdvancedMonitoringEc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testAdvancedMonitoringEc2Pass(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
+        String flowLogsEnabledOverride = row.getString(10);
 
         System.out.println("\n[ADVANCEDMONITORING TEST] EC2 Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4847,14 +3076,7 @@ class TruthTableValidationTest {
         System.out.println("   Flow Logs: " + (flowLogsEnabledOverride != null ? flowLogsEnabledOverride : "default"));
         System.out.println("   Focus: Enhanced monitoring, detailed logging, network visibility");
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // 2 tests
@@ -4863,25 +3085,11 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/advancedmonitoring_fargate_pass.csv",
         numLinesToSkip = 1
     )
-    void testAdvancedMonitoringFargatePass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testAdvancedMonitoringFargatePass(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
+        String flowLogsEnabledOverride = row.getString(10);
 
         System.out.println("\n[ADVANCEDMONITORING TEST] Fargate Configuration: " + configName);
         System.out.println("   Framework: " + complianceFramework);
@@ -4889,14 +3097,7 @@ class TruthTableValidationTest {
         System.out.println("   Flow Logs: " + (flowLogsEnabledOverride != null ? flowLogsEnabledOverride : "default"));
         System.out.println("   Focus: Enhanced monitoring, detailed logging, network visibility");
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== L1 CDK-NAG VIOLATION TESTS ==========
@@ -4907,38 +3108,15 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/l1_cdk-nag_violations.csv",
         numLinesToSkip = 1
     )
-    void testL1CdkNagViolations(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testL1CdkNagViolations(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
 
         System.out.println("\n[L1 VIOLATION TEST] Testing cdk-nag violations: " + configName);
         System.out.println("   Expected: L1 (cdk-nag) should FAIL with violations");
         System.out.println("   Pack: " + mapFrameworkToNagPack(complianceFramework));
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== L2 FRAMEWORKRULES VIOLATION TESTS ==========
@@ -4949,38 +3127,15 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/l2_frameworkrules_violations.csv",
         numLinesToSkip = 1
     )
-    void testL2FrameworkRulesViolations(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testL2FrameworkRulesViolations(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
 
         System.out.println("\n[L2 VIOLATION TEST] Testing FrameworkRules violations: " + configName);
         System.out.println("   Expected: L2 (FrameworkRules) should FAIL with violations");
         System.out.println("   Framework: " + complianceFramework);
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== ADVISORY EDGE CASE TESTS ==========
@@ -4991,39 +3146,17 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/advisory_edge_cases.csv",
         numLinesToSkip = 1
     )
-    void testAdvisoryEdgeCases(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testAdvisoryEdgeCases(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
 
         System.out.println("\n[ADVISORY TEST] Testing edge case: " + configName);
         System.out.println("   Expected: PASS (may have advisories)");
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   Retention: " + (logRetentionDaysOverride != null ? logRetentionDaysOverride + " days" : "default"));
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== NEGATIVE EDGE CASE TESTS ==========
@@ -5036,39 +3169,16 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/negative_edge_cases.csv",
         numLinesToSkip = 1
     )
-    void testNegativeEdgeCases(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testNegativeEdgeCases(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
 
         System.out.println("\n[NEGATIVE TEST] Testing invalid configuration: " + configName);
         System.out.println("   Expected: FAIL (validation should reject this config)");
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   This test validates that validation logic works correctly");
 
-        // Delegate to main CSV test method - should fail at some layer
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     // ========== LOG RETENTION VALIDATION TESTS ==========
@@ -5079,39 +3189,18 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/log_retention_validation.csv",
         numLinesToSkip = 1
     )
-    void testLogRetentionValidation(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
+    void testLogRetentionValidation(ArgumentsAccessor row) {
+        String configName = row.getString(0);
+        String complianceFramework = row.getString(8);
+        String logRetentionDaysOverride = row.getString(9);
+        String expectedResult = row.getString(11);
 
         System.out.println("\n[LOG RETENTION TEST] " + configName);
         System.out.println("   Framework: " + complianceFramework);
         System.out.println("   Retention: " + logRetentionDaysOverride + " days");
         System.out.println("   Expected: " + expectedResult);
 
-        // Delegate to main CSV test method
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+        runMatrixRow(row);
     }
 
     /**
@@ -5139,33 +3228,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_cms_fargate_prod_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsCmsFargateProdSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsCmsFargateProdSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5173,33 +3237,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_cms_fargate_staging_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsCmsFargateStagingSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsCmsFargateStagingSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5207,33 +3246,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_cms_fargate_prod_all_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsCmsFargateProdAllPass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsCmsFargateProdAllPass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5241,33 +3255,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_cms_ec2_prod_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsCmsEc2ProdSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsCmsEc2ProdSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5275,33 +3264,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_cms_ec2_prod_all_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsCmsEc2ProdAllPass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsCmsEc2ProdAllPass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5309,33 +3273,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_other_fargate_prod_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsOtherFargateProdSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsOtherFargateProdSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5343,33 +3282,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_other_fargate_staging_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsOtherFargateStagingSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsOtherFargateStagingSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5377,33 +3291,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_other_fargate_prod_all_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsOtherFargateProdAllPass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsOtherFargateProdAllPass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5411,33 +3300,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_other_ec2_prod_soc2_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsOtherEc2ProdSoc2Pass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsOtherEc2ProdSoc2Pass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
     @ParameterizedTest(name = "{0}")
@@ -5445,33 +3309,8 @@ class TruthTableValidationTest {
         resources = "/compliance-matrices/apps_other_ec2_prod_all_pass.csv",
         numLinesToSkip = 1
     )
-    void testAppsOtherEc2ProdAllPass(
-            String configName,
-            String runtime,
-            String securityProfile,
-            String domainConfig,
-            String sslConfig,
-            String subdomainConfig,
-            String authMode,
-            String networkMode,
-            String complianceFramework,
-            String logRetentionDaysOverride,
-            String flowLogsEnabledOverride,
-            String expectedResult,
-            String applicationId,
-            String provisionDatabase,
-            String region,
-            String gdprDataTransferApproved,
-            String restrictSecurityGroupEgress,
-            String cloudWatchLogsKmsEncryptionEnabled) {
-
-        testComplianceFrameworkIntegrationCsv(
-            configName, runtime, securityProfile, domainConfig, sslConfig,
-            subdomainConfig, authMode, networkMode, complianceFramework,
-            logRetentionDaysOverride, flowLogsEnabledOverride, expectedResult,
-            applicationId, provisionDatabase, region, gdprDataTransferApproved,
-            restrictSecurityGroupEgress, cloudWatchLogsKmsEncryptionEnabled
-        );
+    void testAppsOtherEc2ProdAllPass(ArgumentsAccessor row) {
+        runMatrixRow(row);
     }
 
 }

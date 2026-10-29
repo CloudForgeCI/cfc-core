@@ -74,6 +74,7 @@ import java.util.Optional;
  *   <li>networkMode: "public-no-nat" | "private-with-nat" (default: public-no-nat)</li>
  *   <li>wafEnabled: Enable AWS WAF (default: false)</li>
  *   <li>albAccessLogging: Enable ALB access logs to S3 (default: false)</li>
+ *   <li>albExplicitName: Name the ALB in lowercase so its DNS name is lowercase (default: true)</li>
  *   <li>cloudfront: Enable CloudFront distribution (default: false)</li>
  *   <li>bastionCidr: Retained for backwards compatibility; no longer gates ECS Exec or SSH. Instance access uses SSM Session Manager; Fargate access uses ECS Exec.</li>
  * </ul>
@@ -283,6 +284,7 @@ public final class DeploymentContext {
     public Boolean wafEnabled() { return config.wafEnabled; }
     public Boolean httpsStrictEnabled() { return config.httpsStrictEnabled; }
     public Boolean albAccessLogging() { return config.albAccessLogging; }
+    public Boolean albExplicitName() { return config.albExplicitName; }
     public Boolean guardDutyEnabled() { return config.guardDutyEnabled; }
     public Boolean createGuardDutyDetector() { return config.createGuardDutyDetector; }
     public Boolean guardDutyAlertsConfigured() { return config.guardDutyAlertsConfigured; }
@@ -319,6 +321,7 @@ public final class DeploymentContext {
     public Boolean rdsDeletionProtectionEnabled() { return config.rdsDeletionProtectionEnabled; }
     public Boolean rdsDatabaseMultiAzEnabled() { return config.rdsDatabaseMultiAzEnabled; }
     public Boolean snsKmsEncryptionEnabled() { return config.snsKmsEncryptionEnabled; }
+    public Boolean secretsKmsEncryptionEnabled() { return config.secretsKmsEncryptionEnabled; }
     public Boolean imdsv2Required() { return config.imdsv2Required; }
 
     public Boolean cloudfrontEnabled() { return config.cloudfrontEnabled; }

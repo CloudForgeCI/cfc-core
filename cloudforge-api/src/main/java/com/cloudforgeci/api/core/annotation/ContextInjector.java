@@ -8,6 +8,7 @@ import com.cloudforge.core.enums.SecurityProfile;
 import software.constructs.Construct;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Member;
 import java.lang.reflect.Method;
 
 /**
@@ -160,50 +161,15 @@ public final class ContextInjector {
             throw new IllegalArgumentException("Property name cannot be null or empty");
         }
 
-        Object value = null;
-        boolean found = false;
-
-        // Try to access as a public field first (e.g., SystemContext.stackName)
-        try {
-            Field contextField = contextObject.getClass().getField(propertyName);
-            value = contextField.get(contextObject);
-            found = true;
-        } catch (NoSuchFieldException e) {
-            // Not a field, try methods instead
-        }
-
-        // If no field matched, try methods -- a method that legitimately returns null (the
-        // property is unset, not missing) still counts as found, so it isn't logged as a gap.
-        if (!found) {
-            // Try standard getter method (e.g., "region" -> "region()")
-            Method method = findMethod(contextObject.getClass(), propertyName);
-            if (method != null) {
-                value = method.invoke(contextObject);
-                found = true;
-            }
-
-            // Try "get" prefix (e.g., "wafEnabled" -> "getWafEnabled()")
-            if (!found) {
-                method = findMethod(contextObject.getClass(), "get" + capitalize(propertyName));
-                if (method != null) {
-                    value = method.invoke(contextObject);
-                    found = true;
-                }
-            }
-
-            // Try "is" prefix for boolean (e.g., "wafEnabled" -> "isWafEnabled()")
-            if (!found) {
-                method = findMethod(contextObject.getClass(), "is" + capitalize(propertyName));
-                if (method != null) {
-                    value = method.invoke(contextObject);
-                    found = true;
-                }
-            }
-        }
-
-        if (!found) {
+        Member accessor = accessorFor(contextObject.getClass(), propertyName);
+        if (accessor == null) {
             throw new NoSuchMethodException("No field or getter found for property: " + propertyName);
         }
+        // A getter that legitimately returns null (the property is unset, not missing) still
+        // counts as found, so it isn't logged as a gap.
+        Object value = accessor instanceof Field field
+            ? field.get(contextObject)
+            : ((Method) accessor).invoke(contextObject);
 
         if (value == null) {
             return null;
@@ -218,6 +184,28 @@ public final class ContextInjector {
         }
 
         return value;
+    }
+
+    /**
+     * The member the injector reads for a property: a public field named after it, else
+     * {@code name()}, {@code getName()} or {@code isName()}, in that order.
+     *
+     * @return the field or method, or null when the context class exposes none of them
+     */
+    static Member accessorFor(Class<?> contextClass, String propertyName) {
+        try {
+            return contextClass.getField(propertyName);
+        } catch (NoSuchFieldException e) {
+            // not a field, try the getter forms
+        }
+        for (String candidate : new String[] {
+                propertyName, "get" + capitalize(propertyName), "is" + capitalize(propertyName)}) {
+            Method method = findMethod(contextClass, candidate);
+            if (method != null) {
+                return method;
+            }
+        }
+        return null;
     }
 
     /**

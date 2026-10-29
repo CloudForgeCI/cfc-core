@@ -51,20 +51,14 @@ import java.util.Map;
     websiteUrl = "https://www.concretecms.org",
     defaultImage = "php:8.2-apache"
 )
-public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
+public class ConcreteCmsApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "concrete-cms";
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/concrete";
     protected static final String VOLUME_NAME = "concreteData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "mysqli", "pdo_mysql", "gd", "curl", "mbstring", "xml",
         "dom", "zip", "intl", "json", "opcache", "redis",
@@ -74,23 +68,8 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -104,31 +83,11 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/";
-    }
-
-    @Override
     public int defaultHealthCheckGracePeriod() {
         return 180;
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -160,28 +119,8 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public int phpMemoryLimit() {
-        return 256;
-    }
-
-    @Override
     public int phpMaxExecutionTime() {
         return 300;
-    }
-
-    @Override
-    public int phpUploadMaxFilesize() {
-        return 64;
-    }
-
-    @Override
-    public int phpPostMaxSize() {
-        return 64;
-    }
-
-    @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
     }
 
     @Override
@@ -192,11 +131,6 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/application/files";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -211,28 +145,8 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Concrete has built-in cache drivers
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -243,28 +157,13 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return true;
-    }
-
-    @Override
     public String multisiteMode() {
         return "subdirectory";
     }
 
     @Override
-    public String cmsCategory() {
-        return "cms";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -288,22 +187,7 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
             .withDatabaseName("concrete");
     }
 
-    @Override
-    public int backupRetentionDays() {
-        return 7;
-    }
-
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -323,26 +207,11 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpRuntimeConfig phpConfig = PhpRuntimeConfig.defaults().withVersion("8.2");
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
         PhpUserDataBuilder.installComposer(builder);
 
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         builder.addCommands(
             "# Download Concrete CMS",
@@ -364,9 +233,7 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'Concrete CMS installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override
@@ -385,11 +252,6 @@ public class ConcreteCmsApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new ConcreteCmsOidcIntegration();
-    }
-
-    @Override
-    public List<String> getSupportedAuthModes() {
-        return List.of("alb-oidc", "none");
     }
 
     // ========== Path-Based Authentication ==========

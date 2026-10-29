@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Database security compliance validation rules.
@@ -146,44 +147,30 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
 
         // RDS encryption at rest -- read the field RdsFactory actually consumes
         // (enableEncryption), not the disconnected "rdsEncryptionEnabled" name.
-        boolean rdsEncryptionEnabled = getBooleanSetting(ctx, "enableEncryption", true);
+        boolean rdsEncryptionEnabled = RuleSettings.contextValue(ctx, "enableEncryption", true);
 
-        if (!rdsEncryptionEnabled) {
-            rules.add(ComplianceRule.fail(
-                "RDS-ENCRYPTION",
-                "RDS encryption at rest must be enabled",
-                "RdsEncryptionAtRestEnabled",
-                "Enable RDS encryption at rest for all database instances. " +
+        rules.add(ComplianceRule.check(
+            rdsEncryptionEnabled,
+            "RDS-ENCRYPTION",
+            "RDS encryption at rest enabled",
+            "RDS encryption at rest must be enabled",
+            "RdsEncryptionAtRestEnabled",
+            "Enable RDS encryption at rest for all database instances. " +
                 "PCI-DSS Req 3.4, HIPAA §164.312(a)(2)(iv), GDPR Art.32(1)(a). " +
-                "Set enableEncryption = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "RDS-ENCRYPTION",
-                "RDS encryption at rest enabled",
-                "RdsEncryptionAtRestEnabled"
-            ));
-        }
+                "Set enableEncryption = true in deployment context."));
 
         // RDS automated backups
-        boolean rdsBackupEnabled = getBooleanSetting(ctx, "rdsBackupEnabled", true);
+        boolean rdsBackupEnabled = RuleSettings.contextValue(ctx, "rdsBackupEnabled", true);
 
-        if (!rdsBackupEnabled) {
-            rules.add(ComplianceRule.fail(
-                "RDS-BACKUP",
-                "RDS automated backups must be enabled",
-                "RdsBackupEnabled",
-                "Enable automated backups for RDS instances (7-35 days retention). " +
+        rules.add(ComplianceRule.check(
+            rdsBackupEnabled,
+            "RDS-BACKUP",
+            "RDS automated backups enabled",
+            "RDS automated backups must be enabled",
+            "RdsBackupEnabled",
+            "Enable automated backups for RDS instances (7-35 days retention). " +
                 "HIPAA §164.310(d)(2)(iii), SOC2 A1.3, GDPR Art.32(1)(c). " +
-                "Set rdsBackupEnabled = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "RDS-BACKUP",
-                "RDS automated backups enabled",
-                "RdsBackupEnabled"
-            ));
-        }
+                "Set rdsBackupEnabled = true in deployment context."));
 
         // Multi-AZ for production - use ComplianceMatrix. Mirror RdsFactory.createDatabase's own
         // override-then-profile-default resolution (databaseMultiAz context override, falling back
@@ -233,36 +220,26 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         // Backup retention period
         int rdsBackupRetentionDays = getIntSetting(ctx, "rdsBackupRetentionDays", 7);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && rdsBackupRetentionDays < 7) {
-            rules.add(ComplianceRule.fail(
-                "RDS-BACKUP-RETENTION",
-                "RDS backup retention must be at least 7 days for production",
-                "Minimum 7 days backup retention required. Current: " + rdsBackupRetentionDays + " days. " +
-                "Set rdsBackupRetentionDays = 7 (or higher) in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "RDS-BACKUP-RETENTION",
-                "RDS backup retention configured: " + rdsBackupRetentionDays + " days"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && rdsBackupRetentionDays < 7),
+            "RDS-BACKUP-RETENTION",
+            "RDS backup retention configured: " + rdsBackupRetentionDays + " days",
+            "RDS backup retention must be at least 7 days for production",
+            null,
+            "Minimum 7 days backup retention required. Current: " + rdsBackupRetentionDays + " days. " +
+                "Set rdsBackupRetentionDays = 7 (or higher) in deployment context."));
 
         // Minor version auto-upgrade (security patches)
-        boolean rdsAutoMinorVersionUpgrade = getBooleanSetting(ctx, "rdsAutoMinorVersionUpgrade", true);
+        boolean rdsAutoMinorVersionUpgrade = RuleSettings.contextValue(ctx, "rdsAutoMinorVersionUpgrade", true);
 
-        if (!rdsAutoMinorVersionUpgrade && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
-            rules.add(ComplianceRule.fail(
-                "RDS-AUTO-UPGRADE",
-                "RDS automatic minor version upgrades recommended for production",
-                "Enable automatic minor version upgrades for security patches. " +
-                "PCI-DSS Req 6.2. Set rdsAutoMinorVersionUpgrade = true."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "RDS-AUTO-UPGRADE",
-                "RDS automatic minor version upgrades enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(!rdsAutoMinorVersionUpgrade && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)),
+            "RDS-AUTO-UPGRADE",
+            "RDS automatic minor version upgrades enabled",
+            "RDS automatic minor version upgrades recommended for production",
+            null,
+            "Enable automatic minor version upgrades for security patches. " +
+                "PCI-DSS Req 6.2. Set rdsAutoMinorVersionUpgrade = true."));
 
         return rules;
     }
@@ -306,7 +283,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
     private List<ComplianceRule> validateDynamoDbSecurity(SystemContext ctx) {
         List<ComplianceRule> rules = new ArrayList<>();
 
-        boolean dynamoDbEnabled = getBooleanSetting(ctx, "dynamoDbEnabled", false);
+        boolean dynamoDbEnabled = RuleSettings.contextValue(ctx, "dynamoDbEnabled", false);
 
         if (!dynamoDbEnabled) {
             // No DynamoDB in use, skip validation
@@ -318,27 +295,20 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         // DynamoDB encryption at rest
-        boolean dynamoDbEncryptionEnabled = getBooleanSetting(ctx, "dynamoDbEncryptionEnabled", true);
+        boolean dynamoDbEncryptionEnabled = RuleSettings.contextValue(ctx, "dynamoDbEncryptionEnabled", true);
 
-        if (!dynamoDbEncryptionEnabled) {
-            rules.add(ComplianceRule.fail(
-                "DYNAMODB-ENCRYPTION",
-                "DynamoDB encryption at rest must be enabled",
-                "DynamoDbEncryptionEnabled",
-                "Enable DynamoDB encryption at rest (KMS). " +
+        rules.add(ComplianceRule.check(
+            dynamoDbEncryptionEnabled,
+            "DYNAMODB-ENCRYPTION",
+            "DynamoDB encryption at rest enabled",
+            "DynamoDB encryption at rest must be enabled",
+            "DynamoDbEncryptionEnabled",
+            "Enable DynamoDB encryption at rest (KMS). " +
                 "PCI-DSS Req 3.4, HIPAA §164.312(a)(2)(iv), GDPR Art.32(1)(a). " +
-                "Set dynamoDbEncryptionEnabled = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "DYNAMODB-ENCRYPTION",
-                "DynamoDB encryption at rest enabled",
-                "DynamoDbEncryptionEnabled"
-            ));
-        }
+                "Set dynamoDbEncryptionEnabled = true in deployment context."));
 
         // DynamoDB Point-in-Time Recovery - use ComplianceMatrix
-        boolean dynamoDbPitrEnabled = getBooleanSetting(ctx, "dynamoDbPitrEnabled", false);
+        boolean dynamoDbPitrEnabled = RuleSettings.contextValue(ctx, "dynamoDbPitrEnabled", false);
 
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
         ComplianceMode complianceMode = ctx.cfc.complianceMode();
@@ -400,7 +370,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         // below specifically checks ctx.dbConnection itself, so it still needs to run (and fail)
         // when the flag claims a database but ctx.dbConnection is empty -- that mismatch is
         // exactly what it exists to catch.
-        boolean rdsEnabled = getBooleanSetting(ctx, "rdsEnabled", false);
+        boolean rdsEnabled = RuleSettings.contextValue(ctx, "rdsEnabled", false);
         if (!rdsEnabled && ctx.dbConnection.get().isEmpty()) {
             return rules; // Skip if RDS not in use
         }
@@ -431,7 +401,7 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         // Performance Insights
-        boolean performanceInsightsEnabled = getBooleanSetting(ctx, "performanceInsightsEnabled", false);
+        boolean performanceInsightsEnabled = RuleSettings.contextValue(ctx, "performanceInsightsEnabled", false);
 
         if (performanceInsightsEnabled) {
             rules.add(ComplianceRule.pass(
@@ -440,27 +410,22 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
             ));
 
             // Performance Insights encryption
-            boolean performanceInsightsEncrypted = getBooleanSetting(ctx, "performanceInsightsEncrypted", true);
+            boolean performanceInsightsEncrypted = RuleSettings.contextValue(ctx, "performanceInsightsEncrypted", true);
 
-            if (!performanceInsightsEncrypted) {
-                rules.add(ComplianceRule.fail(
-                    "DB-PERFORMANCE-INSIGHTS-ENCRYPTION",
-                    "Performance Insights data must be encrypted",
-                    "Enable encryption for Performance Insights data. " +
-                    "Set performanceInsightsEncrypted = true."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "DB-PERFORMANCE-INSIGHTS-ENCRYPTION",
-                    "Performance Insights encryption enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                performanceInsightsEncrypted,
+                "DB-PERFORMANCE-INSIGHTS-ENCRYPTION",
+                "Performance Insights encryption enabled",
+                "Performance Insights data must be encrypted",
+                null,
+                "Enable encryption for Performance Insights data. " +
+                    "Set performanceInsightsEncrypted = true."));
         }
 
         // Enhanced Monitoring. Mirrors RdsFactory's own default resolution (unset -> true for
-        // PRODUCTION) rather than getBooleanSetting's hardcoded false -- otherwise a default
+        // PRODUCTION) rather than RuleSettings.contextValue's hardcoded false -- otherwise a default
         // PRODUCTION+database deploy synthesizes with Enhanced Monitoring actually enabled but
-        // still fails this check, since getBooleanSetting only sees the raw context value.
+        // still fails this check, since RuleSettings.contextValue only sees the raw context value.
         boolean enhancedMonitoringEnabled = ctx.cfc.rdsEnhancedMonitoringEnabled() != null
             ? ctx.cfc.rdsEnhancedMonitoringEnabled()
             : ctx.security == SecurityProfile.PRODUCTION;
@@ -480,18 +445,6 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
         }
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -520,9 +473,9 @@ public class DatabaseSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ENCRYPTION_AT_REST", "BACKUP_RECOVERY", "DATABASE_MULTI_AZ", "DATABASE_PITR",
-            "DATABASE_LOGGING", "DATABASE_ACCESS_CONTROL"
+        return ClaimedControls.of(
+            SecurityControl.ENCRYPTION_AT_REST, SecurityControl.BACKUP_RECOVERY, SecurityControl.DATABASE_MULTI_AZ, SecurityControl.DATABASE_PITR,
+            SecurityControl.DATABASE_LOGGING, SecurityControl.DATABASE_ACCESS_CONTROL
         );
     }
 }

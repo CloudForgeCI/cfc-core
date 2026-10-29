@@ -1,12 +1,11 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.IAMProfile;
-import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforgeci.api.network.VpcFactory;
 import com.cloudforgeci.api.network.DomainFactory;
 import com.cloudforgeci.api.ingress.AlbFactory;
@@ -103,10 +102,8 @@ class OidcAuthenticationFactoryTest {
         App app = new App();
         Stack stack = createOidcEnabledStack(app, "TestOidcEnabled", RuntimeType.FARGATE);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -144,10 +141,8 @@ class OidcAuthenticationFactoryTest {
         cfcContext.put("lbType", "alb");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                                                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.EC2);
 
@@ -181,10 +176,8 @@ class OidcAuthenticationFactoryTest {
         cfcContext.put("fqdn", "jenkins.example.com");  // Required for OIDC
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -218,10 +211,8 @@ class OidcAuthenticationFactoryTest {
         cfcContext.put("fqdn", "jenkins.example.com");  // Required for OIDC
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -255,10 +246,8 @@ class OidcAuthenticationFactoryTest {
         cfcContext.put("fqdn", "jenkins.example.com");  // Required for OIDC
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -281,10 +270,8 @@ class OidcAuthenticationFactoryTest {
         App app = new App();
         Stack stack = createOidcEnabledStack(app, "TestOidcPriority", RuntimeType.FARGATE);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -309,10 +296,8 @@ class OidcAuthenticationFactoryTest {
         App app = new App();
         Stack stack = createOidcEnabledStack(app, "TestOidcPaths", RuntimeType.FARGATE);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 
@@ -342,10 +327,8 @@ class OidcAuthenticationFactoryTest {
         App app = new App();
         Stack stack = createOidcEnabledStack(app, "TestOidcEc2", RuntimeType.EC2);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.EC2);
 
@@ -390,10 +373,8 @@ class OidcAuthenticationFactoryTest {
         cfcContext.put("fqdn", "jenkins.example.com");  // Required for OIDC
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                                                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         buildMinimalInfrastructure(stack, ctx, RuntimeType.FARGATE);
 

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Incident response and disaster recovery compliance validation rules.
@@ -131,66 +132,51 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
 
         // Incident response plan documented
-        boolean incidentResponsePlanDocumented = getBooleanSetting(ctx, "incidentResponsePlanDocumented", securityMonitoringEnabled);
+        boolean incidentResponsePlanDocumented = RuleSettings.contextValue(ctx, "incidentResponsePlanDocumented", securityMonitoringEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponsePlanDocumented) {
-            rules.add(ComplianceRule.fail(
-                "INCIDENT-RESPONSE-PLAN",
-                "Incident response plan required for production",
-                "Document incident response procedures including: detection, analysis, " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponsePlanDocumented),
+            "INCIDENT-RESPONSE-PLAN",
+            "Incident response plan documented or not required for " + ctx.security +
+                (securityMonitoringEnabled ? " (via security profile)" : ""),
+            "Incident response plan required for production",
+            null,
+            "Document incident response procedures including: detection, analysis, " +
                 "containment, eradication, recovery, post-incident review. " +
                 "PCI-DSS Req 12.10.1; HIPAA §164.308(a)(6); SOC2 CC7.4; GDPR Art.33. " +
                 "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set incidentResponsePlanDocumented = true when plan is documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "INCIDENT-RESPONSE-PLAN",
-                "Incident response plan documented or not required for " + ctx.security +
-                (securityMonitoringEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set incidentResponsePlanDocumented = true when plan is documented."));
 
         // Incident response team defined
-        boolean incidentResponseTeamDefined = getBooleanSetting(ctx, "incidentResponseTeamDefined", securityMonitoringEnabled);
+        boolean incidentResponseTeamDefined = RuleSettings.contextValue(ctx, "incidentResponseTeamDefined", securityMonitoringEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTeamDefined) {
-            rules.add(ComplianceRule.fail(
-                "INCIDENT-RESPONSE-TEAM",
-                "Incident response team roles and responsibilities required",
-                "Define incident response team: incident commander, technical lead, " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTeamDefined),
+            "INCIDENT-RESPONSE-TEAM",
+            "Incident response team defined or not required" +
+                (securityMonitoringEnabled ? " (via security profile)" : ""),
+            "Incident response team roles and responsibilities required",
+            null,
+            "Define incident response team: incident commander, technical lead, " +
                 "communications coordinator, legal/compliance liaison. " +
                 "PCI-DSS Req 12.10.2. " +
                 "Note: PRODUCTION security profile enables security monitoring by default. " +
-                "Set incidentResponseTeamDefined = true when defined."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "INCIDENT-RESPONSE-TEAM",
-                "Incident response team defined or not required" +
-                (securityMonitoringEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set incidentResponseTeamDefined = true when defined."));
 
         // Incident response testing
-        boolean incidentResponseTested = getBooleanSetting(ctx, "incidentResponseTested", securityMonitoringEnabled);
+        boolean incidentResponseTested = RuleSettings.contextValue(ctx, "incidentResponseTested", securityMonitoringEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTested) {
-            rules.add(ComplianceRule.fail(
-                "INCIDENT-RESPONSE-TESTING",
-                "Incident response plan must be tested annually",
-                "Conduct tabletop exercises or simulated incidents annually. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !incidentResponseTested),
+            "INCIDENT-RESPONSE-TESTING",
+            "Incident response testing completed or not required" +
+                (securityMonitoringEnabled ? " (via security profile)" : ""),
+            "Incident response plan must be tested annually",
+            null,
+            "Conduct tabletop exercises or simulated incidents annually. " +
                 "PCI-DSS Req 12.10.3; SOC2 CC7.4. Document test results and improvements. " +
                 "Note: PRODUCTION security profile provides security monitoring foundation. " +
-                "Set incidentResponseTested = true when last test is within 12 months."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "INCIDENT-RESPONSE-TESTING",
-                "Incident response testing completed or not required" +
-                (securityMonitoringEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set incidentResponseTested = true when last test is within 12 months."));
 
         // Breach notification procedures (72-hour GDPR timeline)
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -198,22 +184,17 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
             complianceFrameworks.toUpperCase().contains("GDPR");
 
         if (requiresGdprNotification) {
-            boolean breachNotification72Hours = getBooleanSetting(ctx, "breachNotification72Hours", false);
+            boolean breachNotification72Hours = RuleSettings.contextValue(ctx, "breachNotification72Hours", false);
 
-            if (!breachNotification72Hours) {
-                rules.add(ComplianceRule.fail(
-                    "BREACH-NOTIFICATION-72HR",
-                    "GDPR requires breach notification to supervisory authority within 72 hours",
-                    "Document procedures for: breach detection, severity assessment, " +
+            rules.add(ComplianceRule.check(
+                breachNotification72Hours,
+                "BREACH-NOTIFICATION-72HR",
+                "GDPR 72-hour breach notification procedures documented",
+                "GDPR requires breach notification to supervisory authority within 72 hours",
+                null,
+                "Document procedures for: breach detection, severity assessment, " +
                     "supervisory authority notification (72 hours), data subject notification. " +
-                    "GDPR Article 33. Set breachNotification72Hours = true when procedures exist."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "BREACH-NOTIFICATION-72HR",
-                    "GDPR 72-hour breach notification procedures documented"
-                ));
-            }
+                    "GDPR Article 33. Set breachNotification72Hours = true when procedures exist."));
         }
 
         return rules;
@@ -239,86 +220,66 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         boolean crossRegionBackup = config != null && config.isCrossRegionBackupEnabled();
 
         // Disaster recovery plan
-        boolean disasterRecoveryPlanDocumented = getBooleanSetting(ctx, "disasterRecoveryPlanDocumented", backupEnabled && crossRegionBackup);
+        boolean disasterRecoveryPlanDocumented = RuleSettings.contextValue(ctx, "disasterRecoveryPlanDocumented", backupEnabled && crossRegionBackup);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryPlanDocumented) {
-            rules.add(ComplianceRule.fail(
-                "DISASTER-RECOVERY-PLAN",
-                "Disaster recovery plan required for production",
-                "Document disaster recovery procedures: RTO/RPO targets, recovery steps, " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryPlanDocumented),
+            "DISASTER-RECOVERY-PLAN",
+            "Disaster recovery plan documented or not required" +
+                (backupEnabled && crossRegionBackup ? " (via security profile)" : ""),
+            "Disaster recovery plan required for production",
+            null,
+            "Document disaster recovery procedures: RTO/RPO targets, recovery steps, " +
                 "communication plan, infrastructure rebuild procedures. " +
                 "PCI-DSS Req 12.10.4; HIPAA §164.308(a)(7)(ii)(B); SOC2 A1.2. " +
                 "Note: PRODUCTION security profile enables automated backups and cross-region replication. " +
-                "Set disasterRecoveryPlanDocumented = true when plan is documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "DISASTER-RECOVERY-PLAN",
-                "Disaster recovery plan documented or not required" +
-                (backupEnabled && crossRegionBackup ? " (via security profile)" : "")
-            ));
-        }
+                "Set disasterRecoveryPlanDocumented = true when plan is documented."));
 
         // Recovery Time Objective (RTO) defined
-        boolean rtoRpoDefined = getBooleanSetting(ctx, "rtoRpoDefined", backupEnabled);
+        boolean rtoRpoDefined = RuleSettings.contextValue(ctx, "rtoRpoDefined", backupEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !rtoRpoDefined) {
-            rules.add(ComplianceRule.fail(
-                "RTO-RPO-DEFINED",
-                "Recovery Time Objective (RTO) and Recovery Point Objective (RPO) required",
-                "Define acceptable downtime (RTO) and data loss (RPO) for each system. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !rtoRpoDefined),
+            "RTO-RPO-DEFINED",
+            "RTO/RPO defined or not required" +
+                (backupEnabled ? " (via security profile)" : ""),
+            "Recovery Time Objective (RTO) and Recovery Point Objective (RPO) required",
+            null,
+            "Define acceptable downtime (RTO) and data loss (RPO) for each system. " +
                 "SOC2 A1.2. Common targets: RTO 4-24 hours, RPO 1-24 hours. " +
                 "Note: PRODUCTION security profile provides backup foundation. " +
-                "Set rtoRpoDefined = true when RTO/RPO are documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "RTO-RPO-DEFINED",
-                "RTO/RPO defined or not required" +
-                (backupEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set rtoRpoDefined = true when RTO/RPO are documented."));
 
         // Disaster recovery testing
-        boolean disasterRecoveryTested = getBooleanSetting(ctx, "disasterRecoveryTested", backupEnabled);
+        boolean disasterRecoveryTested = RuleSettings.contextValue(ctx, "disasterRecoveryTested", backupEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryTested) {
-            rules.add(ComplianceRule.fail(
-                "DISASTER-RECOVERY-TESTING",
-                "Disaster recovery plan must be tested annually",
-                "Conduct DR test: restore from backups, rebuild infrastructure, verify RTO/RPO. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !disasterRecoveryTested),
+            "DISASTER-RECOVERY-TESTING",
+            "Disaster recovery testing completed or not required" +
+                (backupEnabled ? " (via security profile)" : ""),
+            "Disaster recovery plan must be tested annually",
+            null,
+            "Conduct DR test: restore from backups, rebuild infrastructure, verify RTO/RPO. " +
                 "PCI-DSS Req 12.10.5; HIPAA §164.308(a)(7)(ii)(D); SOC2 A1.2. " +
                 "Note: PRODUCTION security profile enables automated backups. " +
-                "Set disasterRecoveryTested = true when last test is within 12 months."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "DISASTER-RECOVERY-TESTING",
-                "Disaster recovery testing completed or not required" +
-                (backupEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set disasterRecoveryTested = true when last test is within 12 months."));
 
         // Business continuity plan
-        boolean businessContinuityPlan = getBooleanSetting(ctx, "businessContinuityPlan", backupEnabled && crossRegionBackup);
+        boolean businessContinuityPlan = RuleSettings.contextValue(ctx, "businessContinuityPlan", backupEnabled && crossRegionBackup);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !businessContinuityPlan) {
-            rules.add(ComplianceRule.fail(
-                "BUSINESS-CONTINUITY-PLAN",
-                "Business continuity plan required for critical systems",
-                "Document business continuity procedures: alternate processing site, " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !businessContinuityPlan),
+            "BUSINESS-CONTINUITY-PLAN",
+            "Business continuity plan documented or not required" +
+                (backupEnabled && crossRegionBackup ? " (via security profile)" : ""),
+            "Business continuity plan required for critical systems",
+            null,
+            "Document business continuity procedures: alternate processing site, " +
                 "personnel availability, critical business functions prioritization. " +
                 "SOC2 A1.1. " +
                 "Note: PRODUCTION security profile enables cross-region backup for DR. " +
-                "Set businessContinuityPlan = true when documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "BUSINESS-CONTINUITY-PLAN",
-                "Business continuity plan documented or not required" +
-                (backupEnabled && crossRegionBackup ? " (via security profile)" : "")
-            ));
-        }
+                "Set businessContinuityPlan = true when documented."));
 
         return rules;
     }
@@ -341,7 +302,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         }
 
         // Backup restore testing
-        boolean backupRestoreTested = getBooleanSetting(ctx, "backupRestoreTested", false);
+        boolean backupRestoreTested = RuleSettings.contextValue(ctx, "backupRestoreTested", false);
 
         if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && config.isAutomatedBackupEnabled() && !backupRestoreTested) {
             rules.add(ComplianceRule.fail(
@@ -363,20 +324,15 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && config.isAutomatedBackupEnabled()) {
             boolean offsiteBackupStorage = config.isCrossRegionBackupEnabled();
 
-            if (!offsiteBackupStorage) {
-                rules.add(ComplianceRule.fail(
-                    "OFFSITE-BACKUP-STORAGE",
-                    "Off-site backup storage required for disaster recovery",
-                    "Enable cross-region backup replication for geographic redundancy. " +
+            rules.add(ComplianceRule.check(
+                offsiteBackupStorage,
+                "OFFSITE-BACKUP-STORAGE",
+                "Cross-region backup storage enabled",
+                "Off-site backup storage required for disaster recovery",
+                null,
+                "Enable cross-region backup replication for geographic redundancy. " +
                     "PCI-DSS Req 9.5.1; HIPAA §164.310(d)(2)(iv); SOC2 A1.3. " +
-                    "Set crossRegionBackupEnabled = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "OFFSITE-BACKUP-STORAGE",
-                    "Cross-region backup storage enabled"
-                ));
-            }
+                    "Set crossRegionBackupEnabled = true in deployment context."));
         }
 
         return rules;
@@ -401,7 +357,7 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
         }
 
         // CloudTrail log file validation (prevents tampering)
-        boolean cloudTrailLogValidation = getBooleanSetting(ctx, "cloudTrailLogFileValidation", config.isCloudTrailEnabled());
+        boolean cloudTrailLogValidation = RuleSettings.contextValue(ctx, "cloudTrailLogFileValidation", config.isCloudTrailEnabled());
 
         if (config.isCloudTrailEnabled() && !cloudTrailLogValidation) {
             rules.add(ComplianceRule.fail(
@@ -423,59 +379,37 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
 
         // Centralized log aggregation (implied by CloudTrail and security monitoring)
         boolean securityMonitoringEnabled = config.isSecurityMonitoringEnabled();
-        boolean centralizedLogAggregation = getBooleanSetting(ctx, "centralizedLogAggregation", securityMonitoringEnabled);
+        boolean centralizedLogAggregation = RuleSettings.contextValue(ctx, "centralizedLogAggregation", securityMonitoringEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !centralizedLogAggregation) {
-            rules.add(ComplianceRule.fail(
-                "CENTRALIZED-LOG-AGGREGATION",
-                "Centralized log aggregation recommended for forensic analysis",
-                "Aggregate logs to CloudWatch Logs, S3, or SIEM for correlation and analysis. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !centralizedLogAggregation),
+            "CENTRALIZED-LOG-AGGREGATION",
+            "Centralized log aggregation configured or not required" +
+                (securityMonitoringEnabled ? " (via security profile)" : ""),
+            "Centralized log aggregation recommended for forensic analysis",
+            null,
+            "Aggregate logs to CloudWatch Logs, S3, or SIEM for correlation and analysis. " +
                 "PCI-DSS Req 10.6; SOC2 CC7.2. " +
                 "Note: PRODUCTION security profile enables security monitoring and CloudTrail. " +
-                "Set centralizedLogAggregation = true when logs are centralized."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "CENTRALIZED-LOG-AGGREGATION",
-                "Centralized log aggregation configured or not required" +
-                (securityMonitoringEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set centralizedLogAggregation = true when logs are centralized."));
 
         // Log review and alerting (implied by GuardDuty and security monitoring)
         boolean guardDutyEnabled = config.isGuardDutyEnabled();
-        boolean automatedLogReview = getBooleanSetting(ctx, "automatedLogReview", guardDutyEnabled || securityMonitoringEnabled);
+        boolean automatedLogReview = RuleSettings.contextValue(ctx, "automatedLogReview", guardDutyEnabled || securityMonitoringEnabled);
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !automatedLogReview) {
-            rules.add(ComplianceRule.fail(
-                "AUTOMATED-LOG-REVIEW",
-                "Automated log review and alerting required",
-                "Configure CloudWatch alarms or GuardDuty for automated log analysis. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) && !automatedLogReview),
+            "AUTOMATED-LOG-REVIEW",
+            "Automated log review configured or not required" +
+                (guardDutyEnabled || securityMonitoringEnabled ? " (via security profile)" : ""),
+            "Automated log review and alerting required",
+            null,
+            "Configure CloudWatch alarms or GuardDuty for automated log analysis. " +
                 "PCI-DSS Req 10.6.1; HIPAA §164.308(a)(1)(ii)(D). " +
                 "Note: PRODUCTION security profile enables GuardDuty and security monitoring. " +
-                "Set automatedLogReview = true when automated alerting is configured."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "AUTOMATED-LOG-REVIEW",
-                "Automated log review configured or not required" +
-                (guardDutyEnabled || securityMonitoringEnabled ? " (via security profile)" : "")
-            ));
-        }
+                "Set automatedLogReview = true when automated alerting is configured."));
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -521,8 +455,8 @@ public class IncidentResponseRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "BACKUP_RECOVERY"
+        return ClaimedControls.of(
+            SecurityControl.BACKUP_RECOVERY
         );
     }
 }

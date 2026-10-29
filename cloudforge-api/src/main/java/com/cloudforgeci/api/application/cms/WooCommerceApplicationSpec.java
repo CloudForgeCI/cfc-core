@@ -69,11 +69,6 @@ public class WooCommerceApplicationSpec extends WordPressApplicationSpec {
     // ========== ApplicationSpec Overrides ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public int defaultHealthCheckGracePeriod() {
         return 240; // 4 minutes for WooCommerce startup (heavier than WordPress)
     }
@@ -123,16 +118,6 @@ public class WooCommerceApplicationSpec extends WordPressApplicationSpec {
         // WooCommerce action scheduler (handles subscriptions, background tasks)
         crons.put("*/5 * * * *", String.format("wp --path=/var/www/html action-scheduler run --allow-root > /dev/null 2>&1"));
         return crons;
-    }
-
-    @Override
-    public boolean supportsMultisite() {
-        return false; // WooCommerce multisite is complex, not recommended for typical deployments
-    }
-
-    @Override
-    public String cmsCategory() {
-        return "ecommerce";
     }
 
     // ========== DatabaseSpec Overrides ==========

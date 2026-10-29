@@ -26,17 +26,16 @@ import java.util.logging.Logger;
  * - Defaults can be overridden for framework-specific requirements (e.g., log retention, GuardDuty)
  * - Balances production-like security with operational flexibility for testing
  */
-public class StagingSecurityProfileConfiguration implements SecurityProfileConfiguration {
+public class StagingSecurityProfileConfiguration extends AbstractHardenedProfileConfiguration {
 
     private static final Logger LOG = Logger.getLogger(StagingSecurityProfileConfiguration.class.getName());
-    private final DeploymentContext deploymentContext;
 
     /**
      * Create StagingSecurityProfileConfiguration.
      * @param deploymentContext Optional deployment context for overriding defaults
      */
     public StagingSecurityProfileConfiguration(DeploymentContext deploymentContext) {
-        this.deploymentContext = deploymentContext;
+        super(deploymentContext, "STAGING", LOG);
         LOG.fine("=== STAGING profile constructor called ===");
         LOG.fine("deploymentContext = " + (deploymentContext != null ? "NOT NULL" : "NULL"));
         if (deploymentContext != null) {
@@ -54,11 +53,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
-    public DeploymentContext getDeploymentContext() {
-        return deploymentContext;
-    }
-
-    @Override
     public SecurityProfile getSecurityProfile() {
         return SecurityProfile.STAGING;
     }
@@ -67,24 +61,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
      * Get the effective compliance mode, defaulting intelligently based on whether frameworks are specified.
      * If frameworks are specified, defaults to ENFORCE. If no frameworks, defaults to DISABLED.
      */
-    private ComplianceMode getEffectiveComplianceMode() {
-        if (deploymentContext == null) {
-            return ComplianceMode.DISABLED;
-        }
-
-        // Use the compliance mode from deployment context if set
-        ComplianceMode contextMode = deploymentContext.complianceMode();
-        if (contextMode != null) {
-            return contextMode;
-        }
-
-        // Default based on whether compliance frameworks are enabled
-        String frameworks = deploymentContext.complianceFrameworks();
-        return (frameworks != null && !frameworks.isEmpty())
-            ? ComplianceMode.ENFORCE
-            : ComplianceMode.DISABLED;
-    }
-
     // Logging Configuration - Moderate retention
     @Override
     public RetentionDays getLogRetentionDays() {
@@ -104,214 +80,39 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         return RetentionDays.THREE_MONTHS; // Minimum retention for SOC2/GDPR compliance
     }
 
-    @Override
-    public RemovalPolicy getLogRemovalPolicy() {
-        return RemovalPolicy.RETAIN; // Retain logs for staging analysis
-    }
-
     // Flow Log Configuration - Enhanced monitoring
-    @Override
-    public boolean isFlowLogsEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.NETWORK_FLOW_LOGS
-            )) {
-                LOG.severe("STAGING profile: Flow Logs enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.enableFlowlogs() != null) {
-            return Boolean.TRUE.equals(deploymentContext.enableFlowlogs());
-        }
-
-        // Default: enabled for staging monitoring
-        return true;
-    }
-
-    @Override
-    public FlowLogTrafficType getFlowLogTrafficType() {
-        return FlowLogTrafficType.ALL; // Record accepted and rejected traffic
-    }
 
     // Security Monitoring - Moderate for staging
-    @Override
-    public boolean isSecurityMonitoringEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.SECURITY_MONITORING
-            )) {
-                LOG.severe("STAGING profile: Security Monitoring enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor)
-        if (deploymentContext != null && deploymentContext.securityMonitoringEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.securityMonitoringEnabled());
-        }
-
-        // Default: enabled for staging
-        return true;
-    }
-
-    @Override
-    public boolean isCloudTrailEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.AUDIT_LOGGING
-            )) {
-                LOG.severe("STAGING profile: CloudTrail enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.cloudTrailEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.cloudTrailEnabled());
-        }
-
-        // Default: enabled for staging audit
-        return true;
-    }
 
     @Override
     public boolean isGuardDutyEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.THREAT_DETECTION
-            )) {
-                LOG.severe("STAGING profile: GuardDuty enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.guardDutyEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.guardDutyEnabled());
-            LOG.severe("STAGING profile: Overriding GuardDuty from deployment context: " + enabled);
-            return enabled;
-        }
-
         // Default: optional for staging (default for non-compliant deployments)
-        return false;
+        return controls.resolve("GuardDuty", ComplianceMatrix.SecurityControl.THREAT_DETECTION,
+            DeploymentContext::guardDutyEnabled, false);
     }
 
     @Override
     public boolean isAwsConfigEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.VULNERABILITY_MANAGEMENT
-            )) {
-                LOG.severe("STAGING profile: AWS Config enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.awsConfigEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.awsConfigEnabled());
-        }
-
-        return false;
+        return controls.resolve("AWS Config", ComplianceMatrix.SecurityControl.VULNERABILITY_MANAGEMENT,
+            DeploymentContext::awsConfigEnabled, false);
     }
 
     @Override
     public boolean isAuditManagerEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.AUDIT_MANAGER
-            )) {
-                LOG.severe("STAGING profile: Audit Manager enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check). This is the
-        // audit-manager-SERVICE flag, distinct from DeploymentConfig#auditManagerEnabled, which is
-        // the separate master gate SecurityRules.install() uses to decide whether ANY FrameworkRules
-        // compliance validation runs at all.
-        if (deploymentContext != null && deploymentContext.auditManagerServiceEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.auditManagerServiceEnabled());
-        }
-
-        return false;
+        return controls.resolve("Audit Manager", ComplianceMatrix.SecurityControl.AUDIT_MANAGER,
+            DeploymentContext::auditManagerServiceEnabled, false);
     }
 
     // Encryption Configuration - Full encryption
-    @Override
-    public boolean isEbsEncryptionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            )) {
-                LOG.severe("STAGING profile: EBS Encryption enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.ebsEncryptionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.ebsEncryptionEnabled());
-            LOG.info("STAGING profile: Overriding EBS Encryption from deployment context: " + enabled);
-            return enabled;
-        }
-
-        // Default: encryption enabled
-        return true;
-    }
 
     @Override
     public boolean isEfsEncryptionInTransitEnabled() {
         // Check if compliance matrix requires this control
         if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
+            ComplianceMode mode = controls.effectiveMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.ENCRYPTION_IN_TRANSIT
@@ -325,67 +126,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         return true;
     }
 
-    @Override
-    public boolean isEfsEncryptionAtRestEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            )) {
-                LOG.severe("STAGING profile: EFS Encryption at Rest enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.efsEncryptionAtRestEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.efsEncryptionAtRestEnabled());
-            LOG.info("STAGING profile: Overriding EFS Encryption at Rest from deployment context: " + enabled);
-            return enabled;
-        }
-
-        // Default: encryption enabled
-        return true;
-    }
-
-    @Override
-    public boolean isS3EncryptionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST
-            )) {
-                LOG.severe("STAGING profile: S3 Encryption enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.s3EncryptionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3EncryptionEnabled());
-            LOG.info("STAGING profile: Overriding S3 Encryption from deployment context: " + enabled);
-            return enabled;
-        }
-
-        // Default: encryption enabled
-        return true;
-    }
-
     // Network Security - Moderate restrictions
-    @Override
-    public boolean isVpcEndpointsEnabled() {
-        return true; // Enabled for staging security
-    }
 
     @Override
     public boolean isRestrictSecurityGroupEgressEnabled() {
@@ -398,10 +139,10 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
         // Check if compliance matrix requires network segmentation
         if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
+            ComplianceMode mode = controls.effectiveMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.NETWORK_SEGMENTATION
@@ -412,11 +153,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         }
 
         return false; // Default: allow all outbound unless explicitly enabled
-    }
-
-    @Override
-    public boolean isNatGatewayEnabled() {
-        return true; // Use private subnets for staging
     }
 
     @Override
@@ -439,10 +175,10 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
         // Check if compliance matrix requires WAF protection
         if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
+            ComplianceMode mode = controls.effectiveMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.WAF_PROTECTION
@@ -466,10 +202,10 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
         // Check if compliance matrix requires HTTPS strict mode
         if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
+            ComplianceMode mode = controls.effectiveMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.HTTPS_STRICT
@@ -481,15 +217,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
         // Default: disabled (allow HTTP→HTTPS redirect for better UX)
         return false;
-    }
-
-    @Override
-    public boolean isCloudFrontEnabled() {
-        // Check deployment context first, then fall back to profile default
-        if (deploymentContext != null && deploymentContext.cloudfrontEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.cloudfrontEnabled());
-        }
-        return false; // Optional for staging
     }
 
     // Backup and Recovery - Moderate for staging
@@ -505,118 +232,27 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isCrossRegionBackupEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
-            )) {
-                LOG.severe("STAGING profile: Cross-Region Backup enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor)
-        if (deploymentContext != null && deploymentContext.crossRegionBackupEnabled() != null) {
-            return Boolean.TRUE.equals(deploymentContext.crossRegionBackupEnabled());
-        }
-
         // Default: optional for staging
-        return false;
+        return controls.resolve("Cross-Region Backup", ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
+            DeploymentContext::crossRegionBackupEnabled, false);
     }
 
     @Override
     public boolean isBackupVaultLockEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
-            )) {
-                LOG.severe("STAGING profile: Backup Vault Lock enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.backupVaultLockEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultLockEnabled());
-            LOG.info("STAGING profile: Overriding Backup Vault Lock from deployment context: " + enabled);
-            return enabled;
-        }
-
         // Default: Vault lock typically not enabled in staging to allow easy cleanup
-        return false;
+        return controls.resolve("Backup Vault Lock", ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
+            DeploymentContext::backupVaultLockEnabled, false);
     }
 
     @Override
     public boolean isBackupVaultRetentionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.BACKUP_RECOVERY
-            )) {
-                LOG.severe("STAGING profile: Backup Vault Retention enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.backupVaultRetentionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.backupVaultRetentionEnabled());
-            LOG.info("STAGING profile: Overriding Backup Vault Retention from deployment context: " + enabled);
-            return enabled;
-        }
-
         // Default: Staging environments typically don't retain backup vaults
         // to allow easy cleanup and recreation
-        return false;
+        return controls.resolve("Backup Vault Retention", ComplianceMatrix.SecurityControl.BACKUP_RECOVERY,
+            DeploymentContext::backupVaultRetentionEnabled, false);
     }
 
     // Compliance and Audit - Moderate for staging
-    @Override
-    public boolean isDetailedBillingEnabled() {
-        return true; // Enabled for staging cost analysis
-    }
-
-    @Override
-    public boolean isAlbAccessLoggingEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.AUDIT_LOGGING
-            )) {
-                LOG.severe("STAGING profile: ALB Access Logging enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.albAccessLogging() != null) {
-            return Boolean.TRUE.equals(deploymentContext.albAccessLogging());
-        }
-
-        // Default: enabled for staging analysis
-        return true;
-    }
 
     @Override
     public RetentionDays getAlbAccessLogRetentionDays() {
@@ -624,15 +260,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     // Performance and Reliability - Moderate for staging
-    @Override
-    public boolean isMultiAzEnforced() {
-        return true; // Multi-AZ for staging reliability
-    }
-
-    @Override
-    public boolean isAutoScalingEnabled() {
-        return true; // Auto-scaling for staging
-    }
 
     @Override
     public int getMinInstanceCount() {
@@ -645,152 +272,21 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     // AWS Config Remediation Settings - Staging mirrors production for compliance testing
-    @Override
-    public boolean isS3VersioningRemediationEnabled() {
-        // Disabled by default due to cost implications
-        // Enable in staging to test versioning behavior before production
-        return false;
-    }
-
-    @Override
-    public boolean isCloudTrailBucketAccessRemediationEnabled() {
-        // Disabled by default to prevent automatic policy changes
-        // Enable in staging to validate CloudTrail bucket policies
-        return false;
-    }
-
-    @Override
-    public boolean isEbsEncryptionRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate EBS encryption remediation
-        return true;
-    }
-
-    @Override
-    public boolean isGuardDutyRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate GuardDuty remediation behavior
-        return true;
-    }
-
-    @Override
-    public boolean isVpcDefaultSgRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate default security group remediation
-        return true;
-    }
-
-    @Override
-    public boolean isElbDeletionProtectionRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate load balancer deletion protection
-        return true;
-    }
-
-    @Override
-    public boolean isKmsKeyRotationRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate KMS key rotation remediation
-        return true;
-    }
-
-    @Override
-    public boolean isSshRemovalRemediationEnabled() {
-        // Disabled by default - could break SSH access for testing
-        // Enable in staging to validate SSH removal behavior before production
-        return false;
-    }
-
-    @Override
-    public boolean isAccessKeyRotationRemediationEnabled() {
-        // Disabled by default - requires user notification workflow
-        // Enable in staging to test access key rotation procedures
-        return false;
-    }
-
-    @Override
-    public boolean isDynamoDbPitrRemediationEnabled() {
-        // Enabled by default - mirrors production for compliance testing
-        // Staging should validate DynamoDB PITR remediation
-        return true;
-    }
-
-    @Override
-    public boolean isRdsMultiAzRemediationEnabled() {
-        // Disabled by default - requires maintenance window and causes downtime
-        // Enable in staging to test Multi-AZ conversion before production
-        return false;
-    }
-
-    @Override
-    public boolean isRdsEncryptionRemediationEnabled() {
-        // Disabled by default - complex operation requiring snapshot recreation
-        // Enable in staging to test RDS encryption process before production
-        return false;
-    }
-
-    @Override
-    public boolean isRdsDeletionProtectionRemediationEnabled() {
-        // Disabled by default - deletion protection is set during RDS creation
-        return false;
-    }
 
     @Override
     public boolean isRdsDeletionProtectionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.DELETION_PROTECTION
-            )) {
-                LOG.severe("STAGING profile: RDS Deletion Protection enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.rdsDeletionProtectionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDeletionProtectionEnabled());
-            LOG.info("STAGING profile: Overriding RDS Deletion Protection from deployment context: " + enabled);
-            return enabled;
-        }
-
         // Default: Staging environments typically don't require deletion protection
         // to allow easy cleanup and recreation
-        return false;
+        return controls.resolve("RDS Deletion Protection", ComplianceMatrix.SecurityControl.DELETION_PROTECTION,
+            DeploymentContext::rdsDeletionProtectionEnabled, false);
     }
 
     @Override
     public boolean isRdsDatabaseMultiAzEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ
-            )) {
-                LOG.severe("STAGING profile: RDS Multi-AZ enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (only if compliance doesn't require it)
-        if (deploymentContext != null && deploymentContext.rdsDatabaseMultiAzEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.rdsDatabaseMultiAzEnabled());
-            LOG.info("STAGING profile: Overriding RDS Multi-AZ from deployment context: " + enabled);
-            return enabled;
-        }
-
         // Default: Staging environments typically use single-AZ for cost savings
         // unless compliance testing requires multi-AZ
-        return false;
+        return controls.resolve("RDS Multi-AZ", ComplianceMatrix.SecurityControl.DATABASE_MULTI_AZ,
+            DeploymentContext::rdsDatabaseMultiAzEnabled, false);
     }
 
     @Override
@@ -826,18 +322,6 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     // ==================== Authentication Configuration ====================
 
     @Override
-    public boolean isMfaRequired() {
-        // MFA required in staging to test production-like security
-        return true;
-    }
-
-    @Override
-    public String getDefaultMfaMethod() {
-        // Test both MFA methods in staging
-        return "both";
-    }
-
-    @Override
     public int getAccessTokenValidityHours() {
         // Moderate token lifetime - balance security and testing convenience
         return 2;
@@ -867,54 +351,7 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
         return 3;
     }
 
-    @Override
-    public boolean isSelfSignupEnabled() {
-        // Admin-controlled access like production
-        return false;
-    }
-
-    @Override
-    public boolean isPreventUserExistenceErrorsEnabled() {
-        // Test production security behavior
-        return true;
-    }
-
-    @Override
-    public boolean isAdvancedSecurityEnabled() {
-        // Enable for CDK-nag COG3 compliance (requires Cognito Plus tier)
-        // Adaptive authentication detects suspicious login patterns
-        return true;
-    }
-
     // ==================== Advanced Monitoring & Threat Detection ====================
-
-    @Override
-    public boolean isMacieEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.SENSITIVE_DATA_DISCOVERY
-            )) {
-                LOG.severe("STAGING profile: Macie enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.macieEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.macieEnabled());
-            LOG.severe("STAGING profile: Overriding Macie from deployment context: " + enabled);
-            return enabled;
-        }
-
-        // STAGING default: false (opt-in for testing)
-        return false;
-    }
 
     @Override
     public boolean isMacieAutomatedDiscoveryEnabled() {
@@ -930,58 +367,16 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isSecurityHubEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.SECURITY_HUB
-            )) {
-                LOG.severe("STAGING profile: Security Hub enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.securityHubEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.securityHubEnabled());
-            LOG.severe("STAGING profile: Overriding Security Hub from deployment context: " + enabled);
-            return enabled;
-        }
-
         // STAGING default: true (test security monitoring)
-        return true;
+        return controls.resolve("Security Hub", ComplianceMatrix.SecurityControl.SECURITY_HUB,
+            DeploymentContext::securityHubEnabled, true);
     }
 
     @Override
     public boolean isInspectorEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.VULNERABILITY_SCANNING
-            )) {
-                LOG.severe("STAGING profile: Inspector enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override (Boolean accessor - need null check)
-        if (deploymentContext != null && deploymentContext.inspectorEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.inspectorEnabled());
-            LOG.severe("STAGING profile: Overriding Inspector from deployment context: " + enabled);
-            return enabled;
-        }
-
         // STAGING default: true (test vulnerability scanning)
-        return true;
+        return controls.resolve("Inspector", ComplianceMatrix.SecurityControl.VULNERABILITY_SCANNING,
+            DeploymentContext::inspectorEnabled, true);
     }
 
     @Override
@@ -1036,39 +431,19 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
 
     @Override
     public boolean isCloudWatchLogsKmsEncryptionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION
-            )) {
-                LOG.info("STAGING profile: CloudWatch Logs KMS encryption enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override
-        if (deploymentContext != null && deploymentContext.cloudWatchLogsKmsEncryptionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudWatchLogsKmsEncryptionEnabled());
-            LOG.info("STAGING profile: Overriding CloudWatch Logs KMS encryption from deployment context: " + enabled);
-            return enabled;
-        }
         // STAGING default: false (optional for testing)
-        return false;
+        return controls.resolve("CloudWatch Logs KMS encryption", ComplianceMatrix.SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION,
+            DeploymentContext::cloudWatchLogsKmsEncryptionEnabled, false);
     }
 
     @Override
     public boolean isAlbDeletionProtectionEnabled() {
         // Check if compliance matrix requires this control
         if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
+            ComplianceMode mode = controls.effectiveMode();
             String frameworks = deploymentContext.complianceFrameworks();
 
-            if (ComplianceMatrix.isControlRequired(
+            if (ComplianceMatrix.isControlEnforced(
                 frameworks,
                 mode,
                 ComplianceMatrix.SecurityControl.DELETION_PROTECTION
@@ -1082,111 +457,10 @@ public class StagingSecurityProfileConfiguration implements SecurityProfileConfi
     }
 
     @Override
-    public boolean isCloudTrailInsightsEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.CLOUDTRAIL_INSIGHTS
-            )) {
-                LOG.info("STAGING profile: CloudTrail Insights enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override
-        if (deploymentContext != null && deploymentContext.cloudTrailInsightsEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.cloudTrailInsightsEnabled());
-            LOG.info("STAGING profile: Overriding CloudTrail Insights from deployment context: " + enabled);
-            return enabled;
-        }
-        // STAGING default: false (optional for testing)
-        return false;
-    }
-
-    @Override
-    public boolean isRoute53QueryLoggingEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.ROUTE53_QUERY_LOGGING
-            )) {
-                LOG.info("STAGING profile: Route53 Query Logging enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override
-        if (deploymentContext != null && deploymentContext.route53QueryLoggingEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.route53QueryLoggingEnabled());
-            LOG.info("STAGING profile: Overriding Route53 Query Logging from deployment context: " + enabled);
-            return enabled;
-        }
-        // STAGING default: false (optional for testing)
-        return false;
-    }
-
-    @Override
-    public boolean isS3ObjectLockEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.S3_OBJECT_LOCK
-            )) {
-                LOG.info("STAGING profile: S3 Object Lock enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override
-        if (deploymentContext != null && deploymentContext.s3ObjectLockEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.s3ObjectLockEnabled());
-            LOG.info("STAGING profile: Overriding S3 Object Lock from deployment context: " + enabled);
-            return enabled;
-        }
-        // STAGING default: false (optional for testing - enable for HIPAA/PCI-DSS)
-        return false;
-    }
-
-    @Override
     public boolean isSnsKmsEncryptionEnabled() {
-        // Check if compliance matrix requires this control
-        if (deploymentContext != null) {
-            ComplianceMode mode = getEffectiveComplianceMode();
-            String frameworks = deploymentContext.complianceFrameworks();
-
-            if (ComplianceMatrix.isControlRequired(
-                frameworks,
-                mode,
-                ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION
-            )) {
-                LOG.info("STAGING profile: SNS KMS encryption enforced by compliance frameworks: " + frameworks);
-                return true;
-            }
-        }
-
-        // Check deployment context override
-        if (deploymentContext != null && deploymentContext.snsKmsEncryptionEnabled() != null) {
-            boolean enabled = Boolean.TRUE.equals(deploymentContext.snsKmsEncryptionEnabled());
-            LOG.info("STAGING profile: Overriding SNS KMS Encryption from deployment context: " + enabled);
-            return enabled;
-        }
         // STAGING: false - Optional for testing
-        return false;
+        return controls.resolve("SNS KMS encryption", ComplianceMatrix.SecurityControl.SNS_KMS_ENCRYPTION,
+            DeploymentContext::snsKmsEncryptionEnabled, false);
     }
 
     @Override

@@ -96,6 +96,7 @@ it into ACM and set `certificateArn`.
 | `wafEnabled` | boolean | profile | AWS WAF web ACL on the load balancer. |
 | `httpsStrictEnabled` | boolean | profile | With TLS enabled, serve HTTPS only (no HTTP listener on port 80). |
 | `albAccessLogging` | boolean | `false` | Load balancer access logs to S3. |
+| `albExplicitName` | boolean | `true` | Names the load balancer explicitly in lowercase so its DNS name, and the Cognito callback URL built from it, is lowercase. Changing it on an existing stack replaces the load balancer; set `false` to keep a generated name. |
 | `cloudfrontEnabled` | boolean | - | CloudFront distribution in front of the load balancer. |
 | `enableFlowlogs` | boolean | profile | VPC Flow Logs. |
 | `restrictSecurityGroupEgress` | boolean | `false` | Restrict egress to the VPC CIDR. Requires VPC endpoints for AWS services. |
@@ -188,7 +189,8 @@ The Cognito defaults marked "derived" are filled by the Interactive Deployer whe
 | `logRetentionDays` | integer | profile | CloudWatch Logs retention. Values are rounded up to the next retention period CloudWatch supports (for example, 730 becomes 731). |
 | `enableEncryption` | boolean | `true` | Encryption at rest. |
 | `efsEncryptionInTransitEnabled` | boolean | `true` | TLS for EFS mounts. |
-| `cloudWatchLogsKmsEncryptionEnabled` | boolean | `false` | Customer-managed KMS keys for log groups. |
+| `cloudWatchLogsKmsEncryptionEnabled` | boolean | profile decides | Customer-managed KMS keys for log groups. On in PRODUCTION, off in STAGING and DEV, and a framework in ENFORCE mode turns it on. |
+| `secretsKmsEncryptionEnabled` | boolean | profile decides | Encrypts the generated application secrets (admin password, license key, cipher key) with a customer-managed KMS key. On in PRODUCTION and STAGING, off in DEV. |
 | `awsConfigEnabled` | boolean | `false` | AWS Config rules for the selected frameworks. |
 | `createConfigInfrastructure` | boolean | `false` | Create the Config recorder and delivery channel. Only one may exist per account and region. |
 | `cloudTrailEnabled` | boolean | `false` | CloudTrail trail. |

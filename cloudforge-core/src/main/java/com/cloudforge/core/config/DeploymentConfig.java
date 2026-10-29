@@ -285,6 +285,20 @@ public class DeploymentConfig {
     )
     public Boolean albAccessLogging;
 
+    /**
+     * Give the ALB an explicit lowercase name so its DNS name is lowercase. Null means true.
+     * Changing the name replaces an existing ALB; set false to keep a generated name.
+     */
+    @ConfigField(
+        displayName = "ALB Explicit Name",
+        description = "Name the ALB explicitly in lowercase so Cognito callback URLs match its DNS name. "
+            + "On an existing stack, changing this replaces the ALB; set false to keep the generated name",
+        category = "network",
+        visibleWhen = "lbType == alb",
+        order = 55
+    )
+    public Boolean albExplicitName;
+
     /** Enable CloudFront CDN */
     @ConfigField(
         displayName = "Enable CloudFront",
@@ -1702,7 +1716,10 @@ public class DeploymentConfig {
     )
     public Boolean auditManagerServiceEnabled = null;
 
-    /** Enable CloudWatch Logs KMS encryption */
+    /**
+     * Enable CloudWatch Logs KMS encryption. Null means the security profile decides: on in
+     * PRODUCTION, off in STAGING and DEV, and on whenever a framework in ENFORCE mode requires it.
+     */
     @ConfigField(
         displayName = "CloudWatch Logs KMS Encryption",
         description = "Encrypt CloudWatch Logs with customer-managed KMS keys (required for PCI-DSS, HIPAA, SOC2)",
@@ -1710,7 +1727,7 @@ public class DeploymentConfig {
         tags = {FieldTag.BILLING_IMPACT},
         order = 170
     )
-    public Boolean cloudWatchLogsKmsEncryptionEnabled = false;
+    public Boolean cloudWatchLogsKmsEncryptionEnabled = null;
 
     /** Enable CloudTrail Insights */
     @ConfigField(
@@ -1824,6 +1841,18 @@ public class DeploymentConfig {
         order = 203
     )
     public Boolean snsKmsEncryptionEnabled = null;
+
+    /**
+     * Encrypt the application's generated secrets (admin password, license key, cipher key) with a
+     * customer-managed KMS key. Null means the security profile decides: on in PRODUCTION and STAGING.
+     */
+    @ConfigField(
+        displayName = "Secrets KMS Encryption",
+        description = "Encrypt generated application secrets with a customer-managed KMS key",
+        category = "security",
+        order = 204
+    )
+    public Boolean secretsKmsEncryptionEnabled = null;
 
     /** Require IMDSv2 on EC2 instances (null = profile default: PRODUCTION/STAGING=true unless the
      *  compliance matrix requires EC2_IMDSV2, DEV=false). ADVISORY for PCI-DSS and GDPR -- this

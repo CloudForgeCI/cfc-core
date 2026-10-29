@@ -52,20 +52,14 @@ import java.util.Map;
     websiteUrl = "https://una.io",
     defaultImage = "php:8.2-apache"
 )
-public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
+public class DolphinApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "dolphin-una";
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
     protected static final String EFS_DATA_PATH = "/una";
     protected static final String VOLUME_NAME = "unaData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "mysqli", "pdo_mysql", "gd", "curl", "mbstring", "xml",
         "dom", "zip", "intl", "json", "opcache", "redis",
@@ -75,23 +69,8 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -105,31 +84,11 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/";
-    }
-
-    @Override
     public int defaultHealthCheckGracePeriod() {
         return 240;
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -181,11 +140,6 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
-    }
-
-    @Override
     public String s3MediaPlugin() {
         return "bx_aws_s3"; // UNA AWS S3 app
     }
@@ -193,11 +147,6 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/storage";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -242,28 +191,8 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // UNA has built-in cache support
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -274,28 +203,13 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return false;
-    }
-
-    @Override
     public String multisiteMode() {
         return "none";
     }
 
     @Override
-    public String cmsCategory() {
-        return "social";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -319,22 +233,7 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
             .withDatabaseName("una");
     }
 
-    @Override
-    public int backupRetentionDays() {
-        return 7;
-    }
-
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -354,12 +253,7 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpRuntimeConfig phpConfig = PhpRuntimeConfig.forSocial();
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
         // Install FFmpeg for video processing
         builder.addCommands(
@@ -368,17 +262,7 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'FFmpeg installed' >> /var/log/userdata.log"
         );
 
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         builder.addCommands(
             "# Download UNA",
@@ -404,9 +288,7 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'UNA installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override
@@ -427,8 +309,4 @@ public class DolphinApplicationSpec implements CmsSpec, DatabaseSpec {
         return new DolphinOidcIntegration();
     }
 
-    @Override
-    public List<String> getSupportedAuthModes() {
-        return List.of("alb-oidc", "none");
-    }
 }

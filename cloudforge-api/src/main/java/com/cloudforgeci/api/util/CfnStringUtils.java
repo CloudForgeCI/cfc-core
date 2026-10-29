@@ -29,4 +29,16 @@ public final class CfnStringUtils {
         }
         return result;
     }
+
+    /**
+     * The lowercase form of an ALB DNS name for use in a callback URL. When the ALB was given an
+     * explicit lowercase name its DNS name is already lowercase and is returned unchanged;
+     * otherwise it is lowercased with {@link #toLowerCase}, which nests 26 Join/Split passes.
+     *
+     * @param dnsName the ALB's DNS name token
+     * @param explicitLowercaseName whether the ALB was created with an explicit lowercase name
+     */
+    public static String lowercaseAlbDns(String dnsName, boolean explicitLowercaseName) {
+        return explicitLowercaseName ? dnsName : toLowerCase(dnsName);
+    }
 }

@@ -115,6 +115,9 @@ public class ContainerFactory extends BaseFactory {
     @SystemContext("licenseKeySecretArn")
     private String licenseKeySecretArn;
 
+    @SystemContext("secretsKmsKeyArn")
+    private String secretsKmsKeyArn;
+
     @SystemContext("autoAdminPasswordSecretArn")
     private String autoAdminPasswordSecretArn;
 
@@ -237,6 +240,18 @@ public class ContainerFactory extends BaseFactory {
         // ApplicationSpec declares (see ApplicationFactory's provisioning above). Independent of
         // database provisioning — applies whenever the secret was provisioned, embedded storage
         // included.
+        // The generated secrets use a customer-managed key when the profile asks for one, and
+        // ECS reads them with the execution role, which then needs to decrypt with that key.
+        if (secretsKmsKeyArn != null && !secretsKmsKeyArn.isBlank() && fargateTaskDef.getExecutionRole() != null) {
+            fargateTaskDef.getExecutionRole().addToPrincipalPolicy(
+                PolicyStatement.Builder.create()
+                    .sid("AllowDecryptApplicationSecrets")
+                    .effect(Effect.ALLOW)
+                    .actions(List.of("kms:Decrypt"))
+                    .resources(List.of(secretsKmsKeyArn))
+                    .build());
+        }
+
         String cipherKeySecretEnvVar = applicationSpec != null ? applicationSpec.cipherKeySecretEnvVar() : null;
         if (cipherKeySecretEnvVar != null && !cipherKeySecretEnvVar.isBlank()
                 && accountCipherKeySecretArn != null && !accountCipherKeySecretArn.isBlank()) {

@@ -24,6 +24,11 @@ import software.constructs.Construct;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import software.amazon.awscdk.CfnResource;
+import software.amazon.awscdk.RemovalPolicy;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.services.kms.IKey;
+import software.amazon.awscdk.services.kms.Key;
 
 /**
  * Universal factory class for deploying any application using ApplicationSpec.
@@ -342,6 +347,7 @@ public class ApplicationFactory extends BaseFactory {
                                 .excludePunctuation(true)
                                 .build())
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .encryptionKey(secretsEncryptionKey())
                         .build();
                 ctx.accountCipherKeySecretArn.set(accountCipherKeySecret.getSecretArn());
                 LOG.info("Successfully provisioned cipher key secret: "
@@ -387,7 +393,12 @@ public class ApplicationFactory extends BaseFactory {
                         .secretStringValue(
                             software.amazon.awscdk.SecretValue.unsafePlainText(resolvedLicenseKey))
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .encryptionKey(secretsEncryptionKey())
                         .build();
+                // The license key is a value the user supplies and cannot be rotated automatically;
+                // the template marks it so the key-management rotation rule skips it.
+                ((CfnResource) licenseKeySecret.getNode().getDefaultChild())
+                    .addMetadata("CloudForgeRotation", "exempt");
                 ctx.licenseKeySecretArn.set(licenseKeySecret.getSecretArn());
                 LOG.info("Successfully provisioned license key secret: "
                     + licenseKeySecret.getSecretName());
@@ -416,7 +427,12 @@ public class ApplicationFactory extends BaseFactory {
                                 .excludePunctuation(true)
                                 .build())
                         .removalPolicy(software.amazon.awscdk.RemovalPolicy.DESTROY)
+                        .encryptionKey(secretsEncryptionKey())
                         .build();
+                // The initial admin password is the application's first-run credential and is not
+                // rotated; the template marks it so the key-management rotation rule skips it.
+                ((CfnResource) adminPasswordSecret.getNode().getDefaultChild())
+                    .addMetadata("CloudForgeRotation", "exempt");
                 ctx.autoAdminPasswordSecretArn.set(adminPasswordSecret.getSecretArn());
                 // Fixed output key (rather than the construct's generated logical id) so tools
                 // such as CloudForge Manager can find it via DescribeStacks for any application,
@@ -621,5 +637,27 @@ public class ApplicationFactory extends BaseFactory {
                    applicationSpec.applicationId() + " ***", e);
             throw e;
         }
+    }
+
+    /**
+     * The customer-managed key that encrypts the secrets this factory creates, created once per
+     * stack, or null when the security profile keeps the AWS-managed key. The key rotates
+     * automatically; AWS keeps earlier key material so earlier ciphertext stays readable.
+     */
+    private IKey secretsEncryptionKey() {
+        var profileConfig = ctx.securityProfileConfig.get().orElse(null);
+        if (profileConfig == null || !profileConfig.isSecretsKmsEncryptionEnabled()) {
+            return null;
+        }
+        if (getNode().tryFindChild("SecretsKmsKey") instanceof IKey existing) {
+            return existing;
+        }
+        Key key = Key.Builder.create(this, "SecretsKmsKey")
+            .description("Encrypts the generated application secrets for " + Stack.of(this).getStackName())
+            .enableKeyRotation(true)
+            .removalPolicy(RemovalPolicy.DESTROY)
+            .build();
+        ctx.secretsKmsKeyArn.set(key.getKeyArn());
+        return key;
     }
 }

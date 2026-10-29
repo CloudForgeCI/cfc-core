@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.storage;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.Duration;
 import software.amazon.awscdk.Fn;
@@ -202,17 +202,13 @@ public class BackupFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             plan,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM4")
-                    .reason("AWS Backup service role uses AWSBackupServiceRolePolicyForBackup " +
+                NagSuppress.of("AwsSolutions-IAM4",
+                    "AWS Backup service role uses AWSBackupServiceRolePolicyForBackup " +
                             "managed policy which is AWS-recommended for backup operations. " +
-                            "CDK automatically creates this role with appropriate permissions.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("AWS Backup service role requires wildcard permissions for backup " +
+                            "CDK automatically creates this role with appropriate permissions."),
+                NagSuppress.of("AwsSolutions-IAM5",
+                    "AWS Backup service role requires wildcard permissions for backup " +
                             "operations across multiple resource types. This is AWS-recommended.")
-                    .build()
             ),
             Boolean.TRUE
         );

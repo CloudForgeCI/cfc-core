@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -75,10 +76,8 @@ class FargateRuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestFargateRules", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -97,10 +96,8 @@ class FargateRuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestFargateBasic", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -117,10 +114,8 @@ class FargateRuntimeConfigurationTest {
         context.put("fqdn", "jenkins.example.com");
         Stack stack = createTestStack(app, "TestFargateSsl", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -147,10 +142,8 @@ class FargateRuntimeConfigurationTest {
         // Intentionally omit domain/fqdn — the imported ARN must not need either.
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -168,10 +161,8 @@ class FargateRuntimeConfigurationTest {
         context.put("httpToHttpsRedirect", true);
         Stack stack = createTestStack(app, "TestFargateRedirect", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -190,10 +181,8 @@ class FargateRuntimeConfigurationTest {
         context.put("unhealthyThreshold", 5);
         Stack stack = createTestStack(app, "TestFargateHealthCheck", SecurityProfile.DEV, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -228,10 +217,8 @@ class FargateRuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestEc2Runtime", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -247,10 +234,8 @@ class FargateRuntimeConfigurationTest {
         context.put("enableSsl", true);
         Stack stack = createTestStack(app, "TestFargateDomain", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -267,10 +252,8 @@ class FargateRuntimeConfigurationTest {
         context.put("fqdn", "jenkins.example.com");
         Stack stack = createTestStack(app, "TestFargateFqdn", SecurityProfile.PRODUCTION, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -287,10 +270,8 @@ class FargateRuntimeConfigurationTest {
         context.put("fqdn", "staging.example.com");
         Stack stack = createTestStack(app, "TestFargateStaging", SecurityProfile.STAGING, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -336,10 +317,8 @@ class FargateRuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestFargateMultiWire", SecurityProfile.DEV, null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 
@@ -378,10 +357,8 @@ class FargateRuntimeConfigurationTest {
         context.put("enableSsl", false);
         Stack stack = createTestStack(app, "TestFargateHttpOnly", SecurityProfile.DEV, context);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         FargateRuntimeConfiguration config = new FargateRuntimeConfiguration();
 

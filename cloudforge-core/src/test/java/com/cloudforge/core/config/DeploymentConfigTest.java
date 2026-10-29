@@ -231,7 +231,7 @@ class DeploymentConfigTest {
 
     @Test
     void testDefaultCloudWatchLogsKmsEncryptionEnabled() {
-        assertFalse(config.cloudWatchLogsKmsEncryptionEnabled);
+        assertNull(config.cloudWatchLogsKmsEncryptionEnabled, "unset: the security profile decides");
     }
 
     // ========== Field Assignment Tests ==========

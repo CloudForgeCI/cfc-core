@@ -31,7 +31,13 @@ class Ec2FactorySecurityTest {
 
     /** Synthesizes an EC2-runtime stack and returns its template's {@code Resources} node. */
     private JsonNode synthesize(String stackName, SecurityProfile profile, String frameworks) throws IOException {
+        return synthesize(stackName, profile, frameworks, null);
+    }
+
+    private JsonNode synthesize(String stackName, SecurityProfile profile, String frameworks,
+                                Boolean logsKmsEncryption) throws IOException {
         DeploymentConfig config = new DeploymentConfig();
+        config.cloudWatchLogsKmsEncryptionEnabled = logsKmsEncryption;
         config.stackName = stackName;
         config.applicationId = "jenkins";
         config.runtime = RuntimeType.EC2;
@@ -83,6 +89,28 @@ class Ec2FactorySecurityTest {
         JsonNode launchTemplate = ofType(resources, "AWS::EC2::LaunchTemplate").get(0);
         assertEquals("required", launchTemplate.path("Properties").path("LaunchTemplateData")
             .path("MetadataOptions").path("HttpTokens").asText());
+    }
+
+    @Test
+    void productionEncryptsTheInstanceLogGroupWithoutAFramework() throws IOException {
+        JsonNode resources = synthesize("Ec2ProdNoFramework", SecurityProfile.PRODUCTION, null);
+
+        assertTrue(instanceLogGroup(resources).path("Properties").has("KmsKeyId"));
+    }
+
+    @Test
+    void anExplicitOptOutLeavesTheInstanceLogGroupUnencryptedInAdvisoryMode() throws IOException {
+        JsonNode resources = synthesize("Ec2ProdOptOut", SecurityProfile.PRODUCTION, "SOC2", false);
+
+        assertFalse(instanceLogGroup(resources).path("Properties").has("KmsKeyId"),
+            "ADVISORY reports the gap and does not override the user's setting");
+    }
+
+    @Test
+    void stagingDoesNotEncryptTheInstanceLogGroupUnlessAskedTo() throws IOException {
+        JsonNode resources = synthesize("Ec2StagingLogs", SecurityProfile.STAGING, null);
+
+        assertFalse(instanceLogGroup(resources).path("Properties").has("KmsKeyId"));
     }
 
     @Test

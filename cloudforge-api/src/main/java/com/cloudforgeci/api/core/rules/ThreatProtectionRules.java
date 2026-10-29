@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Threat protection compliance validation rules.
@@ -90,6 +91,10 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
                     return List.of();
                 }
 
+                if (ComplianceEnforcement.reportsOnly(ctx.cfc.complianceMode(), failedRules)) {
+                    return List.of();
+                }
+
                 // For PRODUCTION, only block on actual infrastructure requirements
                 // Advisory recommendations (container scanning, alert config) are non-blocking
                 List<String> blockingRules = failedRules.stream()
@@ -133,54 +138,39 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
                 "ANTI-MALWARE-PROTECTION",
                 "Anti-malware via GuardDuty runtime protection + immutable containers"
             ));
-        } else if (isProdOrStaging && requiresPciDss && !antiMalwareEnabled) {
-            rules.add(ComplianceRule.fail(
-                "ANTI-MALWARE-PROTECTION",
-                "Anti-malware protection required for PCI-DSS Req 5.1",
-                "PRODUCTION profile with FARGATE + GuardDuty satisfies this requirement. " +
-                "For EC2: deploy anti-malware or set antiMalwareEnabled = true."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ANTI-MALWARE-PROTECTION",
-                "Anti-malware protection configured or not required"
-            ));
-        }
+        } else rules.add(ComplianceRule.check(
+     !(isProdOrStaging && requiresPciDss && !antiMalwareEnabled),
+     "ANTI-MALWARE-PROTECTION",
+     "Anti-malware protection configured or not required",
+     "Anti-malware protection required for PCI-DSS Req 5.1",
+     null,
+     "PRODUCTION profile with FARGATE + GuardDuty satisfies this requirement. " +
+                "For EC2: deploy anti-malware or set antiMalwareEnabled = true."));
 
         // Anti-malware updates
         if (antiMalwareEnabled) {
-            boolean antiMalwareAutoUpdate = getBooleanSetting(ctx, "antiMalwareAutoUpdate", true);
+            boolean antiMalwareAutoUpdate = RuleSettings.contextValue(ctx, "antiMalwareAutoUpdate", true);
 
-            if (!antiMalwareAutoUpdate) {
-                rules.add(ComplianceRule.fail(
-                    "ANTI-MALWARE-AUTO-UPDATE",
-                    "Anti-malware definitions must be kept current",
-                    "Enable automatic anti-malware signature updates. " +
-                    "PCI-DSS Req 5.2. Set antiMalwareAutoUpdate = true."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ANTI-MALWARE-AUTO-UPDATE",
-                    "Anti-malware automatic updates enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                antiMalwareAutoUpdate,
+                "ANTI-MALWARE-AUTO-UPDATE",
+                "Anti-malware automatic updates enabled",
+                "Anti-malware definitions must be kept current",
+                null,
+                "Enable automatic anti-malware signature updates. " +
+                    "PCI-DSS Req 5.2. Set antiMalwareAutoUpdate = true."));
 
             // Malware scan logging
-            boolean malwareScanLogging = getBooleanSetting(ctx, "malwareScanLogging", false);
+            boolean malwareScanLogging = RuleSettings.contextValue(ctx, "malwareScanLogging", false);
 
-            if (!malwareScanLogging) {
-                rules.add(ComplianceRule.fail(
-                    "MALWARE-SCAN-LOGGING",
-                    "Anti-malware scan results must be logged",
-                    "Configure anti-malware to log scan results and alerts. " +
-                    "PCI-DSS Req 5.2. Set malwareScanLogging = true when logging is configured."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "MALWARE-SCAN-LOGGING",
-                    "Malware scan logging enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                malwareScanLogging,
+                "MALWARE-SCAN-LOGGING",
+                "Malware scan logging enabled",
+                "Anti-malware scan results must be logged",
+                null,
+                "Configure anti-malware to log scan results and alerts. " +
+                    "PCI-DSS Req 5.2. Set malwareScanLogging = true when logging is configured."));
         }
 
         // Container image scanning (alternative for containerized workloads)
@@ -277,63 +267,44 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
 
         // GuardDuty alert configuration (PRODUCTION and STAGING)
         if (config.isGuardDutyEnabled()) {
-            boolean guardDutyAlertsConfigured = getBooleanSetting(ctx, "guardDutyAlertsConfigured", false);
+            boolean guardDutyAlertsConfigured = RuleSettings.contextValue(ctx, "guardDutyAlertsConfigured", false);
 
-            if (isProdOrStaging && !guardDutyAlertsConfigured) {
-                rules.add(ComplianceRule.fail(
-                    "GUARDDUTY-ALERTS",
-                    "GuardDuty alerts required for PRODUCTION security incidents",
-                    "Configure EventBridge rules to send GuardDuty findings to SNS/SIEM. " +
-                    "PCI-DSS Req 11.4.3. Set guardDutyAlertsConfigured = true when configured."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "GUARDDUTY-ALERTS",
-                    isProdOrStaging ?
+            rules.add(ComplianceRule.check(
+                !(isProdOrStaging && !guardDutyAlertsConfigured),
+                "GUARDDUTY-ALERTS",
+                isProdOrStaging ?
                         "GuardDuty alerts configured" :
-                        "GuardDuty alerts not required for " + ctx.security
-                ));
-            }
+                        "GuardDuty alerts not required for " + ctx.security,
+                "GuardDuty alerts required for PRODUCTION security incidents",
+                null,
+                "Configure EventBridge rules to send GuardDuty findings to SNS/SIEM. " +
+                    "PCI-DSS Req 11.4.3. Set guardDutyAlertsConfigured = true when configured."));
         }
 
         // WAF for application-layer protection (required for PCI-DSS only)
         if (isProdOrStaging && requiresPciDss) {
-            if (!config.isWafEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "WAF-INTRUSION-PREVENTION",
-                    "Web Application Firewall required for PCI-DSS",
-                    "WafEnabled",
-                    "Enable WAF for protection against OWASP Top 10, SQL injection, XSS attacks. " +
+            rules.add(ComplianceRule.check(
+                config.isWafEnabled(),
+                "WAF-INTRUSION-PREVENTION",
+                "WAF application-layer protection enabled",
+                "Web Application Firewall required for PCI-DSS",
+                "WafEnabled",
+                "Enable WAF for protection against OWASP Top 10, SQL injection, XSS attacks. " +
                     "PCI-DSS Req 6.6, 11.4. " +
-                    "Set wafEnabled = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "WAF-INTRUSION-PREVENTION",
-                    "WAF application-layer protection enabled",
-                    "WafEnabled"
-                ));
-            }
+                    "Set wafEnabled = true in deployment context."));
         }
 
         // Network traffic monitoring (required for PCI-DSS only)
         if (isProdOrStaging && requiresPciDss) {
-            if (!config.isFlowLogsEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "NETWORK-TRAFFIC-MONITORING",
-                    "VPC Flow Logs required for PCI-DSS",
-                    "VpcFlowLogsEnabled",
-                    "Enable VPC Flow Logs for network traffic baseline and anomaly detection. " +
+            rules.add(ComplianceRule.check(
+                config.isFlowLogsEnabled(),
+                "NETWORK-TRAFFIC-MONITORING",
+                "VPC Flow Logs enabled for traffic monitoring",
+                "VPC Flow Logs required for PCI-DSS",
+                "VpcFlowLogsEnabled",
+                "Enable VPC Flow Logs for network traffic baseline and anomaly detection. " +
                     "PCI-DSS Req 11.4. " +
-                    "Set enableFlowlogs = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "NETWORK-TRAFFIC-MONITORING",
-                    "VPC Flow Logs enabled for traffic monitoring",
-                    "VpcFlowLogsEnabled"
-                ));
-            }
+                    "Set enableFlowlogs = true in deployment context."));
         }
 
         return rules;
@@ -371,42 +342,30 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
                 "FILE-INTEGRITY-MONITORING",
                 "File integrity via immutable containers (PRODUCTION profile with FARGATE)"
             ));
-        } else if (isProdOrStaging && requiresPciDss && !fileIntegrityMonitoring) {
-            rules.add(ComplianceRule.fail(
-                "FILE-INTEGRITY-MONITORING",
-                "File integrity monitoring required for PCI-DSS",
-                "Implement file integrity monitoring (FIM) on system files and critical applications. " +
+        } else rules.add(ComplianceRule.check(
+     !(isProdOrStaging && requiresPciDss && !fileIntegrityMonitoring),
+     "FILE-INTEGRITY-MONITORING",
+     "File integrity monitoring configured or not required",
+     "File integrity monitoring required for PCI-DSS",
+     null,
+     "Implement file integrity monitoring (FIM) on system files and critical applications. " +
                 "For containers: use immutable infrastructure (new deployment = new container). " +
                 "PCI-DSS Req 11.5. " +
-                "Set fileIntegrityMonitoring = true when FIM is configured or use PRODUCTION security profile with FARGATE."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FILE-INTEGRITY-MONITORING",
-                "File integrity monitoring configured or not required"
-            ));
-        }
+                "Set fileIntegrityMonitoring = true when FIM is configured or use PRODUCTION security profile with FARGATE."));
 
         // Change detection with AWS Config (required for PCI-DSS with EC2 only)
         // FARGATE has immutable infrastructure, so infrastructure-level change detection via AWS Config is optional
         var config = ctx.securityProfileConfig.get().orElse(null);
         if (config != null && isProdOrStaging && requiresPciDss && !isFargate) {
-            if (!config.isAwsConfigEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "CONFIG-CHANGE-DETECTION",
-                    "AWS Config required for PCI-DSS infrastructure change detection",
-                    "ConfigEnabled",
-                    "Enable AWS Config to detect unauthorized infrastructure changes. " +
+            rules.add(ComplianceRule.check(
+                config.isAwsConfigEnabled(),
+                "CONFIG-CHANGE-DETECTION",
+                "AWS Config change detection enabled",
+                "AWS Config required for PCI-DSS infrastructure change detection",
+                "ConfigEnabled",
+                "Enable AWS Config to detect unauthorized infrastructure changes. " +
                     "PCI-DSS Req 11.5 (infrastructure-level FIM). " +
-                    "Set awsConfigEnabled = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "CONFIG-CHANGE-DETECTION",
-                    "AWS Config change detection enabled",
-                    "ConfigEnabled"
-                ));
-            }
+                    "Set awsConfigEnabled = true in deployment context."));
         }
 
         return rules;
@@ -435,54 +394,32 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
         boolean containerRuntimeSecurity = ctx.cfc.containerRuntimeSecurityEnabled() != null ?
             ctx.cfc.containerRuntimeSecurityEnabled() : false;
 
-        if ((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)
-                && requiresGdpr && !containerRuntimeSecurity) {
-            rules.add(ComplianceRule.fail(
-                "CONTAINER-RUNTIME-SECURITY",
-                "Container runtime security monitoring required for GDPR",
-                "Enable GuardDuty for ECS/EKS runtime threat detection or use third-party tools. " +
+        rules.add(ComplianceRule.check(
+            !((ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)
+                && requiresGdpr && !containerRuntimeSecurity),
+            "CONTAINER-RUNTIME-SECURITY",
+            "Container runtime security configured or not required",
+            "Container runtime security monitoring required for GDPR",
+            null,
+            "Enable GuardDuty for ECS/EKS runtime threat detection or use third-party tools. " +
                 "Monitors suspicious process activity, network connections, privilege escalation. " +
                 "GDPR Art.32(2) requires security of processing. " +
-                "Set containerRuntimeSecurity = true when monitoring is configured."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "CONTAINER-RUNTIME-SECURITY",
-                "Container runtime security configured or not required"
-            ));
-        }
+                "Set containerRuntimeSecurity = true when monitoring is configured."));
 
         // Immutable infrastructure
-        boolean immutableInfrastructure = getBooleanSetting(ctx, "immutableInfrastructure", true);
+        boolean immutableInfrastructure = RuleSettings.contextValue(ctx, "immutableInfrastructure", true);
 
-        if (immutableInfrastructure) {
-            rules.add(ComplianceRule.pass(
-                "IMMUTABLE-INFRASTRUCTURE",
-                "Immutable infrastructure pattern reduces tampering risk"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "IMMUTABLE-INFRASTRUCTURE",
-                "Immutable infrastructure recommended for containers",
-                "Deploy new containers instead of modifying running containers. " +
+        rules.add(ComplianceRule.check(
+            immutableInfrastructure,
+            "IMMUTABLE-INFRASTRUCTURE",
+            "Immutable infrastructure pattern reduces tampering risk",
+            "Immutable infrastructure recommended for containers",
+            null,
+            "Deploy new containers instead of modifying running containers. " +
                 "Prevents unauthorized file modifications. PCI-DSS Req 11.5 (best practice). " +
-                "Set immutableInfrastructure = true."
-            ));
-        }
+                "Set immutableInfrastructure = true."));
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -557,9 +494,9 @@ public class ThreatProtectionRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "THREAT_DETECTION", "WAF_PROTECTION", "NETWORK_FLOW_LOGS", "VULNERABILITY_MANAGEMENT",
-            "CONTAINER_SECURITY", "VULNERABILITY_SCANNING"
+        return ClaimedControls.of(
+            SecurityControl.THREAT_DETECTION, SecurityControl.WAF_PROTECTION, SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.VULNERABILITY_MANAGEMENT,
+            SecurityControl.CONTAINER_SECURITY, SecurityControl.VULNERABILITY_SCANNING
         );
     }
 }

@@ -1,14 +1,12 @@
 package com.cloudforgeci.api.core.iam;
 
 import com.cloudforge.core.enums.TopologyType;
-import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforge.core.enums.SecurityProfile;
 
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.IAMProfile;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
-import com.cloudforgeci.api.interfaces.Rule;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -16,8 +14,6 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 
 import java.util.List;
-
-import static com.cloudforgeci.api.core.rules.RuleKit.require;
 
 /**
  * Standard IAM configuration with balanced permissions.
@@ -29,7 +25,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
  * - Enhanced monitoring and logging
  * - Backup and recovery permissions
  */
-public final class StandardIAMConfiguration implements IAMConfiguration {
+public final class StandardIAMConfiguration extends AbstractIAMConfiguration {
 
     @Override
     public IAMProfile kind() {
@@ -37,46 +33,13 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
     }
 
     @Override
-    public String id() {
-        return "iam:STANDARD";
-    }
-
-    @Override
-    public List<Rule> rules(SystemContext c) {
-        var rules = new java.util.ArrayList<Rule>();
-        rules.add(require("vpc", x -> x.vpc));
-
-        // Instance security group is only required for EC2 runtime
-        if (c.runtime == RuntimeType.EC2) {
-            rules.add(require("instance security group", x -> x.instanceSg));
-        }
-
-        rules.add(require("alb security group", x -> x.albSg));
-        rules.add(require("efs security group", x -> x.efsSg));
-        return rules;
-    }
-
-    @Override
-    public void wire(SystemContext c) {
-        // Create standard IAM roles based on runtime type
-        if (c.runtime == RuntimeType.EC2) {
-            createStandardEC2Role(c);
-        } else if (c.runtime == RuntimeType.FARGATE) {
-            createStandardFargateRoles(c);
-        }
-    }
-
-    private void createStandardEC2Role(SystemContext c) {
+    protected void createEc2Role(SystemContext c) {
         // Get account ID from stack
-        String accountId = software.amazon.awscdk.Stack.of(c).getAccount();
+        String accountId = accountId(c);
 
         // Use stackName for application-aware log paths and bucket patterns
-        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? "/aws/*/" + c.stackName + "*"
-                : "/aws/*";
-        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? c.stackName.toLowerCase() + "-backup-*"
-                : "*-backup-*";
+        String appLogPattern = logGroupPattern(c);
+        String backupBucketPattern = backupBucketPattern(c);
 
         // For PRODUCTION, use Customer Managed Policies
         if (c.security == SecurityProfile.PRODUCTION) {
@@ -179,10 +142,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 ec2Policy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("SSM service endpoints and CloudWatch metrics require wildcards - AWS service requirements")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "SSM service endpoints and CloudWatch metrics require wildcards - AWS service requirements")
                 ),
                 Boolean.TRUE
             );
@@ -204,12 +165,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 ec2Role,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM4")
-                        .reason("AWS managed policies (AmazonSSMManagedInstanceCore, CloudWatchAgentServerPolicy) " +
+                    NagSuppress.of("AwsSolutions-IAM4",
+                        "AWS managed policies (AmazonSSMManagedInstanceCore, CloudWatchAgentServerPolicy) " +
                                 "are AWS-recommended for EC2 instances. They provide minimal permissions " +
                                 "for SSM connectivity and CloudWatch monitoring.")
-                        .build()
                 ),
                 Boolean.TRUE
             );
@@ -276,17 +235,14 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
         }
     }
 
-    private void createStandardFargateRoles(SystemContext c) {
+    @Override
+    protected void createFargateRoles(SystemContext c) {
         // Get account ID from stack
-        String accountId = software.amazon.awscdk.Stack.of(c).getAccount();
+        String accountId = accountId(c);
 
         // Use stackName for application-aware log paths and bucket patterns
-        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? "/aws/*/" + c.stackName + "*"
-                : "/aws/*";
-        String backupBucketPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? c.stackName.toLowerCase() + "-backup-*"
-                : "*-backup-*";
+        String appLogPattern = logGroupPattern(c);
+        String backupBucketPattern = backupBucketPattern(c);
 
         // For PRODUCTION, use Customer Managed Policies
         if (c.security == SecurityProfile.PRODUCTION) {
@@ -402,10 +358,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 executionPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("ECR GetAuthorizationToken and CloudWatch Logs patterns require wildcards - AWS service requirements")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "ECR GetAuthorizationToken and CloudWatch Logs patterns require wildcards - AWS service requirements")
                 ),
                 Boolean.TRUE
             );
@@ -413,10 +367,8 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 taskPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("CloudWatch Logs patterns and CloudWatch metrics require wildcards - AWS service requirements")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "CloudWatch Logs patterns and CloudWatch metrics require wildcards - AWS service requirements")
                 ),
                 Boolean.TRUE
             );
@@ -436,12 +388,10 @@ public final class StandardIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 executionRole,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM4")
-                        .reason("AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
+                    NagSuppress.of("AwsSolutions-IAM4",
+                        "AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
                                 "designed for ECS task execution. It provides minimal required permissions " +
                                 "for pulling container images from ECR and writing logs to CloudWatch.")
-                        .build()
                 ),
                 Boolean.TRUE
             );

@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * PCI-DSS compliance validation rules.
@@ -149,60 +150,40 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Requirement 1.2.1: Network segmentation
-        if (ctx.vpc.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-1.2.1-VPC",
-                "VPC required for network segmentation",
-                "PCI-DSS Req 1.2.1: VPC required for network segmentation"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-1.2.1-VPC",
-                "VPC network segmentation enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.vpc.get().isEmpty(),
+            "PCI-DSS-Req-1.2.1-VPC",
+            "VPC network segmentation enabled",
+            "VPC required for network segmentation",
+            null,
+            "PCI-DSS Req 1.2.1: VPC required for network segmentation"));
 
         // Requirement 1.3: Prohibit direct public access
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-1.3-Network",
-                "Private network mode required for cardholder data environment",
-                "PCI-DSS Req 1.3: Public network mode prohibited for cardholder data environment. " +
-                "Use 'private-with-nat' for production systems processing card data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-1.3-Network",
-                "Private network mode configured"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC),
+            "PCI-DSS-Req-1.3-Network",
+            "Private network mode configured",
+            "Private network mode required for cardholder data environment",
+            null,
+            "PCI-DSS Req 1.3: Public network mode prohibited for cardholder data environment. " +
+                "Use 'private-with-nat' for production systems processing card data."));
 
         // Requirement 1.3.1: Security groups must restrict traffic
-        if (ctx.albSg.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-1.3.1-ALB-SG",
-                "ALB security group required for traffic restrictions",
-                "PCI-DSS Req 1.3.1: ALB security group required for traffic restrictions"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-1.3.1-ALB-SG",
-                "ALB security group configured"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.albSg.get().isEmpty(),
+            "PCI-DSS-Req-1.3.1-ALB-SG",
+            "ALB security group configured",
+            "ALB security group required for traffic restrictions",
+            null,
+            "PCI-DSS Req 1.3.1: ALB security group required for traffic restrictions"));
 
-        if (ctx.efsSg.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-1.3.1-EFS-SG",
-                "EFS security group required for storage access restrictions",
-                "PCI-DSS Req 1.3.1: EFS security group required for storage access restrictions"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-1.3.1-EFS-SG",
-                "EFS security group configured"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.efsSg.get().isEmpty(),
+            "PCI-DSS-Req-1.3.1-EFS-SG",
+            "EFS security group configured",
+            "EFS security group required for storage access restrictions",
+            null,
+            "PCI-DSS Req 1.3.1: EFS security group required for storage access restrictions"));
 
         return rules;
     }
@@ -219,90 +200,56 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         );
 
         // Requirement 3.4: Encryption of cardholder data at rest
-        if (!config.isEbsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-3.4-EBS",
-                "EBS encryption must be enabled for cardholder data at rest",
-                "EbsEncryptionRule",
-                "PCI-DSS Req 3.4: EBS encryption must be enabled for cardholder data at rest"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-3.4-EBS",
-                "EBS encryption enabled",
-                "EbsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEbsEncryptionEnabled(),
+            "PCI-DSS-Req-3.4-EBS",
+            "EBS encryption enabled",
+            "EBS encryption must be enabled for cardholder data at rest",
+            "EbsEncryptionRule",
+            "PCI-DSS Req 3.4: EBS encryption must be enabled for cardholder data at rest"));
 
-        if (!config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-3.4-EFS",
-                "EFS encryption at rest must be enabled for cardholder data storage",
-                "PCI-DSS Req 3.4: EFS encryption at rest must be enabled for cardholder data storage"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-3.4-EFS",
-                "EFS encryption at rest enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionAtRestEnabled(),
+            "PCI-DSS-Req-3.4-EFS",
+            "EFS encryption at rest enabled",
+            "EFS encryption at rest must be enabled for cardholder data storage",
+            null,
+            "PCI-DSS Req 3.4: EFS encryption at rest must be enabled for cardholder data storage"));
 
-        if (!config.isS3EncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-3.4-S3",
-                "S3 encryption must be enabled for cardholder data backups",
-                "S3BucketEncryptionRule",
-                "PCI-DSS Req 3.4: S3 encryption must be enabled for cardholder data backups"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-3.4-S3",
-                "S3 encryption enabled",
-                "S3BucketEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3EncryptionEnabled(),
+            "PCI-DSS-Req-3.4-S3",
+            "S3 encryption enabled",
+            "S3 encryption must be enabled for cardholder data backups",
+            "S3BucketEncryptionRule",
+            "PCI-DSS Req 3.4: S3 encryption must be enabled for cardholder data backups"));
 
         // Requirement 4.1: Strong cryptography for data transmission
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-4.1-EFS-Transit",
-                "EFS encryption in transit (TLS) must be enabled",
-                "PCI-DSS Req 4.1: EFS encryption in transit (TLS) must be enabled"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-4.1-EFS-Transit",
-                "EFS encryption in transit enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "PCI-DSS-Req-4.1-EFS-Transit",
+            "EFS encryption in transit enabled",
+            "EFS encryption in transit (TLS) must be enabled",
+            null,
+            "PCI-DSS Req 4.1: EFS encryption in transit (TLS) must be enabled"));
 
         // Requirement 4.1: SSL/TLS must be enabled for encrypted transmission
-        if (!ctx.cfc.enableSsl()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-4.1-SSL",
-                "SSL/TLS must be enabled for encrypted transmission of cardholder data",
-                "PCI-DSS Req 4.1: enableSsl must be true for production PCI-DSS compliance"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-4.1-SSL",
-                "SSL/TLS enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            ctx.cfc.enableSsl(),
+            "PCI-DSS-Req-4.1-SSL",
+            "SSL/TLS enabled",
+            "SSL/TLS must be enabled for encrypted transmission of cardholder data",
+            null,
+            "PCI-DSS Req 4.1: enableSsl must be true for production PCI-DSS compliance"));
 
         // Validate TLS certificate is configured
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-4.1-TLS",
-                "TLS certificate required for encrypted transmission of cardholder data",
-                "PCI-DSS Req 4.1: TLS certificate required for encrypted transmission of cardholder data"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-4.1-TLS",
-                "TLS certificate configured"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "PCI-DSS-Req-4.1-TLS",
+            "TLS certificate configured",
+            "TLS certificate required for encrypted transmission of cardholder data",
+            null,
+            "PCI-DSS Req 4.1: TLS certificate required for encrypted transmission of cardholder data"));
 
         return rules;
     }
@@ -320,22 +267,15 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         // Requirement 6.6: WAF or application security review
         // WAF is REQUIRED for PRODUCTION environments processing cardholder data
-        if (!config.isWafEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-6.6-WAF",
-                "Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION",
-                "WafEnabled",
-                "PCI-DSS Req 6.6: Protect all public-facing web applications from known attacks by " +
+        rules.add(ComplianceRule.check(
+            config.isWafEnabled(),
+            "PCI-DSS-Req-6.6-WAF",
+            "WAF protection enabled for PCI-DSS compliance",
+            "Web Application Firewall (WAF) REQUIRED for PCI-DSS compliance in PRODUCTION",
+            "WafEnabled",
+            "PCI-DSS Req 6.6: Protect all public-facing web applications from known attacks by " +
                 "installing a web application firewall. WAF is required for PRODUCTION environments " +
-                "processing cardholder data. Set wafEnabled = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-6.6-WAF",
-                "WAF protection enabled for PCI-DSS compliance",
-                "WafEnabled"
-            ));
-        }
+                "processing cardholder data. Set wafEnabled = true in deployment context."));
 
         return rules;
     }
@@ -353,54 +293,35 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         // Req 8.3.6: Minimum 12 character passwords
         int passwordLength = config.getMinimumPasswordLength();
-        if (passwordLength < MIN_PASSWORD_LENGTH) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-8.3.6-Password",
-                "Minimum password length must be " + MIN_PASSWORD_LENGTH + " characters (PCI DSS v4.0 Req 8.3.6)",
-                "IAMPasswordPolicyRule",
-                "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-8.3.6-Password",
-                "Password length requirement met (" + passwordLength + " characters)",
-                "IAMPasswordPolicyRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(passwordLength < MIN_PASSWORD_LENGTH),
+            "PCI-DSS-Req-8.3.6-Password",
+            "Password length requirement met (" + passwordLength + " characters)",
+            "Minimum password length must be " + MIN_PASSWORD_LENGTH + " characters (PCI DSS v4.0 Req 8.3.6)",
+            "IAMPasswordPolicyRule",
+            "Current: " + passwordLength + " characters. Update SecurityProfileConfiguration.getMinimumPasswordLength()."));
 
         // Requirement 7.1: Limit access by business need to know
         // IAM validation is handled by IAMRules, but we verify it's configured
-        if (ctx.iamProfile == null) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-7.1-IAM",
-                "IAM profile must be configured for least privilege access control",
-                "IAMPasswordPolicyRule",
-                "PCI-DSS Req 7.1: IAM profile must be configured for least privilege access control"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-7.1-IAM",
-                "IAM profile configured for access control",
-                "IAMPasswordPolicyRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.iamProfile == null),
+            "PCI-DSS-Req-7.1-IAM",
+            "IAM profile configured for access control",
+            "IAM profile must be configured for least privilege access control",
+            "IAMPasswordPolicyRule",
+            "PCI-DSS Req 7.1: IAM profile must be configured for least privilege access control"));
 
         // Requirement 8.2: Multi-factor authentication
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-8.2-Auth",
-                "Authentication must be enabled for production environments",
-                "PCI-DSS Req 8.2: Authentication must be enabled for production environments. " +
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "PCI-DSS-Req-8.2-Auth",
+            "Authentication enabled",
+            "Authentication must be enabled for production environments",
+            null,
+            "PCI-DSS Req 8.2: Authentication must be enabled for production environments. " +
                 "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' with MFA-enabled identity provider. " +
-                "Users must use multi-factor authentication to access cardholder data."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-8.2-Auth",
-                "Authentication enabled"
-            ));
-        }
+                "Users must use multi-factor authentication to access cardholder data."));
 
         // Requirement 8.3: Strong authentication with MFA
         if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
@@ -409,20 +330,15 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
             boolean hasValidSso = ctx.cfc.ssoInstanceArn() != null && !ctx.cfc.ssoInstanceArn().isEmpty();
 
-            if (!usingCognitoWithMfa && !hasValidSso) {
-                rules.add(ComplianceRule.fail(
-                    "PCI-DSS-Req-8.3-MFA",
-                    "Multi-factor authentication required for OIDC mode",
-                    "PCI-DSS Req 8.3: Multi-factor authentication required for OIDC mode. " +
+            rules.add(ComplianceRule.check(
+                !(!usingCognitoWithMfa && !hasValidSso),
+                "PCI-DSS-Req-8.3-MFA",
+                "Multi-factor authentication configured",
+                "Multi-factor authentication required for OIDC mode",
+                null,
+                "PCI-DSS Req 8.3: Multi-factor authentication required for OIDC mode. " +
                     "Either: (1) Enable Cognito MFA: cognitoAutoProvision = true, cognitoMfaEnabled = true " +
-                    "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "PCI-DSS-Req-8.3-MFA",
-                    "Multi-factor authentication configured"
-                ));
-            }
+                    "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."));
         }
 
         return rules;
@@ -440,64 +356,42 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         );
 
         // Requirement 10.2: Automated audit trails
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.2-CloudTrail",
-                "CloudTrail must be enabled for API activity audit logging",
-                "CloudTrailEnabledRule",
-                "PCI-DSS Req 10.2: CloudTrail must be enabled for API activity audit logging"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.2-CloudTrail",
-                "CloudTrail enabled for audit logging",
-                "CloudTrailEnabledRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "PCI-DSS-Req-10.2-CloudTrail",
+            "CloudTrail enabled for audit logging",
+            "CloudTrail must be enabled for API activity audit logging",
+            "CloudTrailEnabledRule",
+            "PCI-DSS Req 10.2: CloudTrail must be enabled for API activity audit logging"));
 
         // Requirement 10.3: Record specific events
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.3-FlowLogs",
-                "VPC Flow Logs must be enabled for network activity tracking",
-                "PCI-DSS Req 10.3: VPC Flow Logs must be enabled for network activity tracking"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.3-FlowLogs",
-                "VPC Flow Logs enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "PCI-DSS-Req-10.3-FlowLogs",
+            "VPC Flow Logs enabled",
+            "VPC Flow Logs must be enabled for network activity tracking",
+            null,
+            "PCI-DSS Req 10.3: VPC Flow Logs must be enabled for network activity tracking"));
 
         // Requirement 10.5: Secure audit trails
-        if (!config.isAlbAccessLoggingEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.5-ALB",
-                "ALB access logging must be enabled for web traffic audit trails",
-                "PCI-DSS Req 10.5: ALB access logging must be enabled for web traffic audit trails"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.5-ALB",
-                "ALB access logging enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAlbAccessLoggingEnabled(),
+            "PCI-DSS-Req-10.5-ALB",
+            "ALB access logging enabled",
+            "ALB access logging must be enabled for web traffic audit trails",
+            null,
+            "PCI-DSS Req 10.5: ALB access logging must be enabled for web traffic audit trails"));
 
         // Requirement 10.7: Retain audit trail for at least one year
         var retentionDays = config.getLogRetentionDays();
-        if (!isRetentionSufficient(retentionDays)) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.7-Retention",
-                "Log retention must be at least ONE_YEAR (365 days)",
-                "PCI-DSS Req 10.7: Log retention must be at least ONE_YEAR (365 days). Current: " +
-                retentionDays.toString()
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.7-Retention",
-                "Log retention configured for at least one year"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            isRetentionSufficient(retentionDays),
+            "PCI-DSS-Req-10.7-Retention",
+            "Log retention configured for at least one year",
+            "Log retention must be at least ONE_YEAR (365 days)",
+            null,
+            "PCI-DSS Req 10.7: Log retention must be at least ONE_YEAR (365 days). Current: " +
+                retentionDays.toString()));
 
         return rules;
     }
@@ -514,69 +408,45 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         );
 
         // Requirement 11.4: Intrusion detection/prevention systems
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-11.4-GuardDuty",
-                "GuardDuty (threat detection) must be enabled for production",
-                "GuardDutyEnabled",
-                "PCI-DSS Req 11.4: GuardDuty (threat detection) must be enabled for production"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-11.4-GuardDuty",
-                "GuardDuty threat detection enabled",
-                "GuardDutyEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "PCI-DSS-Req-11.4-GuardDuty",
+            "GuardDuty threat detection enabled",
+            "GuardDuty (threat detection) must be enabled for production",
+            "GuardDutyEnabled",
+            "PCI-DSS Req 11.4: GuardDuty (threat detection) must be enabled for production"));
 
         // Requirement 10 & 11: Track and monitor all access to network resources
         // VPC Flow Logs are required for network traffic monitoring and audit trail
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.11-FlowLogs",
-                "VPC Flow Logs required for network monitoring (PCI-DSS Req 10 & 11)",
-                "FlowLogsEnabled",
-                "PCI-DSS Requirement 10 (logging and monitoring) and Requirement 11 (security testing) " +
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "PCI-DSS-Req-10.11-FlowLogs",
+            "VPC Flow Logs enabled for network monitoring",
+            "VPC Flow Logs required for network monitoring (PCI-DSS Req 10 & 11)",
+            "FlowLogsEnabled",
+            "PCI-DSS Requirement 10 (logging and monitoring) and Requirement 11 (security testing) " +
                 "require tracking and monitoring all access to network resources and cardholder data. " +
                 "Enable VPC Flow Logs to capture network traffic for audit trail and anomaly detection. " +
-                "Set flowLogsEnabled = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.11-FlowLogs",
-                "VPC Flow Logs enabled for network monitoring",
-                "FlowLogsEnabled"
-            ));
-        }
+                "Set flowLogsEnabled = true in deployment context."));
 
         // Requirement 11.5: File integrity monitoring
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-11.5-Monitoring",
-                "Security monitoring must be enabled for alerting",
-                "PCI-DSS Req 11.5: Security monitoring must be enabled for alerting"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-11.5-Monitoring",
-                "Security monitoring enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "PCI-DSS-Req-11.5-Monitoring",
+            "Security monitoring enabled",
+            "Security monitoring must be enabled for alerting",
+            null,
+            "PCI-DSS Req 11.5: Security monitoring must be enabled for alerting"));
 
         // Requirement 11.6: Change detection (AWS Config)
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-11.6-Config",
-                "AWS Config recommended for continuous compliance monitoring",
-                "PCI-DSS Req 11.6: AWS Config recommended for continuous compliance monitoring. " +
-                "Set awsConfigEnabled = true in deployment context."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-11.6-Config",
-                "AWS Config enabled for compliance monitoring"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "PCI-DSS-Req-11.6-Config",
+            "AWS Config enabled for compliance monitoring",
+            "AWS Config recommended for continuous compliance monitoring",
+            null,
+            "PCI-DSS Req 11.6: AWS Config recommended for continuous compliance monitoring. " +
+                "Set awsConfigEnabled = true in deployment context."));
 
         return rules;
     }
@@ -597,118 +467,76 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
 
         // Requirement 2.1: Default passwords must be changed
         // PRODUCTION profile requires strong IAM policies and authentication
-        if (isProduction || getBooleanSetting(ctx, "customConfigurationApplied", false)) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.1-CustomConfig",
-                "Custom configuration applied - vendor defaults changed (PRODUCTION profile)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.1-CustomConfig",
-                "Custom configuration required - vendor defaults must be changed",
-                "Verify default passwords, SNMP strings, and credentials have been changed. " +
+        rules.add(ComplianceRule.check(
+            isProduction || RuleSettings.contextValue(ctx, "customConfigurationApplied", false),
+            "PCI-DSS-Req-2.1-CustomConfig",
+            "Custom configuration applied - vendor defaults changed (PRODUCTION profile)",
+            "Custom configuration required - vendor defaults must be changed",
+            null,
+            "Verify default passwords, SNMP strings, and credentials have been changed. " +
                 "PCI-DSS Req 2.1: Change all vendor-supplied defaults before deploying. " +
-                "Set customConfigurationApplied = true after verification or use PRODUCTION security profile."
-            ));
-        }
+                "Set customConfigurationApplied = true after verification or use PRODUCTION security profile."));
 
         // Requirement 2.2: Configuration standards
         // PRODUCTION profile applies hardened security configurations
-        if (isProduction || getBooleanSetting(ctx, "securityHardeningApplied", false)) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.2-Hardening",
-                "Security hardening standards applied (PRODUCTION profile)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.2-Hardening",
-                "Security hardening configuration standards required",
-                "Apply CIS benchmarks or NIST hardening guidelines. " +
+        rules.add(ComplianceRule.check(
+            isProduction || RuleSettings.contextValue(ctx, "securityHardeningApplied", false),
+            "PCI-DSS-Req-2.2-Hardening",
+            "Security hardening standards applied (PRODUCTION profile)",
+            "Security hardening configuration standards required",
+            null,
+            "Apply CIS benchmarks or NIST hardening guidelines. " +
                 "PCI-DSS Req 2.2: Develop configuration standards for all system components. " +
-                "Set securityHardeningApplied = true after implementing hardening or use PRODUCTION security profile."
-            ));
-        }
+                "Set securityHardeningApplied = true after implementing hardening or use PRODUCTION security profile."));
 
         // Requirement 2.2.2: Enable only necessary services
         // PRODUCTION profile enforces minimal service exposure via security groups
-        if (isProduction || getBooleanSetting(ctx, "unnecessaryServicesDisabled", false)) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.2.2-Services",
-                "Unnecessary services disabled (PRODUCTION profile enforces minimal exposure)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.2.2-Services",
-                "Disable unnecessary services and protocols",
-                "PCI-DSS Req 2.2.2: Enable only necessary services, protocols, and daemons. " +
+        rules.add(ComplianceRule.check(
+            isProduction || RuleSettings.contextValue(ctx, "unnecessaryServicesDisabled", false),
+            "PCI-DSS-Req-2.2.2-Services",
+            "Unnecessary services disabled (PRODUCTION profile enforces minimal exposure)",
+            "Disable unnecessary services and protocols",
+            null,
+            "PCI-DSS Req 2.2.2: Enable only necessary services, protocols, and daemons. " +
                 "Remove or disable FTP, telnet, and other insecure services. " +
-                "Set unnecessaryServicesDisabled = true after verification or use PRODUCTION security profile."
-            ));
-        }
+                "Set unnecessaryServicesDisabled = true after verification or use PRODUCTION security profile."));
 
         // Requirement 2.2.5: Remove unnecessary functionality
         // PRODUCTION profile assumes minimal images are used for production deployments
-        if (isProduction || getBooleanSetting(ctx, "minimalBaseImageUsed", false)) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.2.5-MinimalImage",
-                "Minimal base image in use (PRODUCTION profile)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.2.5-MinimalImage",
-                "Use minimal base images without unnecessary functionality",
-                "PCI-DSS Req 2.2.5: Remove unnecessary functionality (scripts, utilities, etc). " +
+        rules.add(ComplianceRule.check(
+            isProduction || RuleSettings.contextValue(ctx, "minimalBaseImageUsed", false),
+            "PCI-DSS-Req-2.2.5-MinimalImage",
+            "Minimal base image in use (PRODUCTION profile)",
+            "Use minimal base images without unnecessary functionality",
+            null,
+            "PCI-DSS Req 2.2.5: Remove unnecessary functionality (scripts, utilities, etc). " +
                 "Use minimal container images or hardened AMIs. " +
-                "Set minimalBaseImageUsed = true when using minimal images or use PRODUCTION security profile."
-            ));
-        }
+                "Set minimalBaseImageUsed = true when using minimal images or use PRODUCTION security profile."));
 
         // Requirement 2.3: Encrypt non-console administrative access
         // Already covered by TLS certificate validation in validateEncryption()
-        if (ctx.cert.get().isPresent()) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.3-EncryptAdmin",
-                "Administrative access encrypted (HTTPS/TLS)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.3-EncryptAdmin",
-                "Encrypt all non-console administrative access",
-                "PCI-DSS Req 2.3: Use SSH, VPN, TLS for remote admin access"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            ctx.cert.get().isPresent(),
+            "PCI-DSS-Req-2.3-EncryptAdmin",
+            "Administrative access encrypted (HTTPS/TLS)",
+            "Encrypt all non-console administrative access",
+            null,
+            "PCI-DSS Req 2.3: Use SSH, VPN, TLS for remote admin access"));
 
         // Requirement 2.4: Maintain inventory of system components
         // AWS Config provides continuous inventory for PRODUCTION deployments
         var config = ctx.securityProfileConfig.get().orElse(null);
-        if ((config != null && config.isAwsConfigEnabled()) || getBooleanSetting(ctx, "systemInventoryMaintained", false)) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-2.4-Inventory",
-                "System inventory maintained (AWS Config enabled)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-2.4-Inventory",
-                "Maintain inventory of system components in scope for PCI-DSS",
-                "PCI-DSS Req 2.4: Keep inventory of all systems in cardholder data environment. " +
+        rules.add(ComplianceRule.check(
+            (config != null && config.isAwsConfigEnabled()) || RuleSettings.contextValue(ctx, "systemInventoryMaintained", false),
+            "PCI-DSS-Req-2.4-Inventory",
+            "System inventory maintained (AWS Config enabled)",
+            "Maintain inventory of system components in scope for PCI-DSS",
+            null,
+            "PCI-DSS Req 2.4: Keep inventory of all systems in cardholder data environment. " +
                 "Use AWS Systems Manager Inventory or Config. " +
-                "Set systemInventoryMaintained = true when inventory system is active or enable AWS Config."
-            ));
-        }
+                "Set systemInventoryMaintained = true when inventory system is active or enable AWS Config."));
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -729,61 +557,41 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
         // Req 4.1: HTTPS-only mode -- distinct from "SSL/TLS enabled" (validateEncryption already
         // checks that): this verifies the HTTP listener is actually disabled, not just that HTTPS
         // is also available alongside it.
-        if (!config.isHttpsStrictEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-4.1-HTTPSStrict",
-                "HTTP listener must be disabled when SSL is enabled (PCI-DSS Req 4.1)",
-                "Set httpsStrictEnabled = true to disable the port-80 listener."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-4.1-HTTPSStrict",
-                "HTTP listener disabled, HTTPS-only mode enforced (PCI-DSS Req 4.1)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isHttpsStrictEnabled(),
+            "PCI-DSS-Req-4.1-HTTPSStrict",
+            "HTTP listener disabled, HTTPS-only mode enforced (PCI-DSS Req 4.1)",
+            "HTTP listener must be disabled when SSL is enabled (PCI-DSS Req 4.1)",
+            null,
+            "Set httpsStrictEnabled = true to disable the port-80 listener."));
 
         // Req 3.4: CloudWatch Logs may contain cardholder data in application log output.
-        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-3.4-LogEncryption",
-                "CloudWatch log groups must be encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)",
-                "Enable cloudWatchLogsKmsEncryptionEnabled."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-3.4-LogEncryption",
-                "CloudWatch log groups encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudWatchLogsKmsEncryptionEnabled(),
+            "PCI-DSS-Req-3.4-LogEncryption",
+            "CloudWatch log groups encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)",
+            "CloudWatch log groups must be encrypted with a customer-managed KMS key (PCI-DSS Req 3.4)",
+            null,
+            "Enable cloudWatchLogsKmsEncryptionEnabled."));
 
         // Req 10.7: audit logs must be tamper-evident.
-        if (!config.isS3ObjectLockEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-10.7-AuditLogImmutability",
-                "S3 Object Lock required so audit logs cannot be altered or deleted (PCI-DSS Req 10.7)",
-                "Enable S3 Object Lock on the audit-log buckets."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-10.7-AuditLogImmutability",
-                "S3 Object Lock enabled on audit-log buckets (PCI-DSS Req 10.7)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3ObjectLockEnabled(),
+            "PCI-DSS-Req-10.7-AuditLogImmutability",
+            "S3 Object Lock enabled on audit-log buckets (PCI-DSS Req 10.7)",
+            "S3 Object Lock required so audit logs cannot be altered or deleted (PCI-DSS Req 10.7)",
+            null,
+            "Enable S3 Object Lock on the audit-log buckets."));
 
         // Req 6.4.5: change control -- CloudTrail plus AWS Config together give a record of every
         // change and detect drift from the deployed baseline.
-        if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "PCI-DSS-Req-6.4.5-ChangeManagement",
-                "Change tracking enabled via CloudTrail and AWS Config (PCI-DSS Req 6.4.5)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "PCI-DSS-Req-6.4.5-ChangeManagement",
-                "Change control tracking required (PCI-DSS Req 6.4.5)",
-                "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled() && config.isAwsConfigEnabled(),
+            "PCI-DSS-Req-6.4.5-ChangeManagement",
+            "Change tracking enabled via CloudTrail and AWS Config (PCI-DSS Req 6.4.5)",
+            "Change control tracking required (PCI-DSS Req 6.4.5)",
+            null,
+            "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."));
 
         // EC2_IMDSV2 is ADVISORY for PCI-DSS (defense in depth, not a PCI-DSS requirement itself),
         // unlike HIPAA/SOC2/FedRAMP where it's REQUIRED; only checked here for EC2 -- Fargate has
@@ -820,12 +628,12 @@ public class PciDssRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "NETWORK_SEGMENTATION", "ENCRYPTION_AT_REST", "ENCRYPTION_IN_TRANSIT",
-            "WAF_PROTECTION", "AUTHENTICATION", "ACCESS_CONTROL", "AUDIT_LOGGING",
-            "NETWORK_FLOW_LOGS", "LOG_RETENTION", "THREAT_DETECTION", "SECURITY_MONITORING",
-            "VULNERABILITY_MANAGEMENT", "HTTPS_STRICT", "CLOUDWATCH_LOGS_KMS_ENCRYPTION",
-            "S3_OBJECT_LOCK", "CHANGE_MANAGEMENT"
+        return ClaimedControls.of(
+            SecurityControl.NETWORK_SEGMENTATION, SecurityControl.ENCRYPTION_AT_REST, SecurityControl.ENCRYPTION_IN_TRANSIT,
+            SecurityControl.WAF_PROTECTION, SecurityControl.AUTHENTICATION, SecurityControl.ACCESS_CONTROL, SecurityControl.AUDIT_LOGGING,
+            SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.LOG_RETENTION, SecurityControl.THREAT_DETECTION, SecurityControl.SECURITY_MONITORING,
+            SecurityControl.VULNERABILITY_MANAGEMENT, SecurityControl.HTTPS_STRICT, SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION,
+            SecurityControl.S3_OBJECT_LOCK, SecurityControl.CHANGE_MANAGEMENT
         );
     }
 

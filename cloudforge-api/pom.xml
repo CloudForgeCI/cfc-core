@@ -146,29 +146,13 @@
               </excludes>
             </configuration>
           </execution>
-          <!-- TruthTableValidationTest is, by a wide margin, the largest single test class in this
-               module (100+ parameterized methods, many CSV-driven with 10+ rows each — hundreds of
-               full CDK synths in one class), and every synth in this module shares one long-lived
-               jsii Node kernel process with no per-test release of live object references. Enough
-               accumulated synths degrade that shared kernel until individual jsii round-trips slow
-               to a crawl — confirmed via a live `sample` of the stuck Node process mid-run: genuine,
-               actively-executing, very deep recursive V8 frames, not a blocked wait. `-Xss8m` above
-               didn't help (see TruthTableValidationTest's own
-               testSoc2PciDssHipaaGdprFargateAllFrameworks javadoc) because it's not a JVM
-               stack-size problem — it's degraded state in the Node-side kernel.
-
-               Isolating this class into its own fork keeps its degradation from ever spreading to
-               (or being made worse by) the other ~1000 tests in this module — a real, worthwhile
-               improvement on its own. It does NOT fully fix the hang for this class specifically:
-               confirmed by reproducing the same genuine-recursion stall inside this isolated fork
-               too, with zero other processes competing for CPU, meaning this one class alone has
-               enough internal synth volume to degrade a completely fresh kernel on its own. A full
-               fix needs either splitting this class into several smaller ones (so no single fork's
-               volume reaches the degradation threshold) or a way to reset the jsii kernel mid-run
-               (blocked today: `JsiiEngine.reset()` exists but is package-private to
-               `software.amazon.jsii`, not callable from this module without reflection). Until then,
-               a hang inside this specific execution is a known, pre-existing, accepted risk — not a
-               sign anything else broke. -->
+          <!-- TruthTableValidationTest has hundreds of parameterized synths, so it runs in its own
+               fork and the default execution above excludes it. An earlier stall in this class came
+               from templates with arrays nested 56 levels deep (CfnStringUtils.toLowerCase builds
+               that for an ALB's generated DNS name). Template.fromStack's cyclic-dependency check
+               takes time proportional to 2 to the power of the nesting depth, so it did not return.
+               The ALB now has an explicit lowercase name by default, which removes the expression,
+               and the whole class finishes in about 23 minutes. -->
           <execution>
             <id>truth-table-isolated-fork</id>
             <phase>test</phase>
@@ -181,8 +165,8 @@
               </includes>
               <reuseForks>false</reuseForks>
               <forkCount>1</forkCount>
-              <!-- A hang here is a known, accepted risk (see the comment above) — bound it so CI
-                   fails with a clear signal instead of stalling the whole test phase indefinitely. -->
+              <!-- Bound the fork so a stall fails with a clear signal instead of holding the whole
+                   test phase. The class takes about 23 minutes, so keep this above that. -->
               <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
             </configuration>
           </execution>
