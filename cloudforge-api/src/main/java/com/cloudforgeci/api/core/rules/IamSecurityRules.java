@@ -174,6 +174,42 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
                     "Required for PCI-DSS Req 8.3 and HIPAA §164.312(d). " +
                     "Set mfaRequired = true in security profile."));
 
+            // Cognito/OIDC sign-ins must be captured by CloudTrail for audit visibility -- CloudTrail
+            // itself is gated by SecurityProfile (ComplianceFactory), so an app using Cognito can
+            // still end up with no audit trail for its own sign-ins if CloudTrail didn't attach.
+            boolean usesCognito = ctx.cognitoUserPoolId.get().isPresent() || ctx.cognitoUserPool.get().isPresent();
+            if (usesCognito) {
+                boolean cloudTrailEnabled = ctx.cloudTrail.get().isPresent();
+
+                ComplianceMatrix.ValidationResult cognitoAuditResult = ComplianceMatrix.validateControlMultiFramework(
+                    ComplianceMatrix.SecurityControl.AUDIT_LOGGING,
+                    complianceFrameworks,
+                    cloudTrailEnabled,
+                    complianceMode
+                );
+
+                if (cognitoAuditResult == ComplianceMatrix.ValidationResult.FAIL) {
+                    rules.add(ComplianceRule.fail(
+                        "COGNITO-AUDIT-TRAIL",
+                        "Cognito sign-ins require CloudTrail for audit visibility, required for " + complianceFrameworks,
+                        "Enable CloudTrail for this security profile so Cognito sign-in API calls " +
+                        "(InitiateAuth, RespondToAuthChallenge, AdminInitiateAuth) are captured as " +
+                        "management events."
+                    ));
+                } else if (cognitoAuditResult == ComplianceMatrix.ValidationResult.WARN) {
+                    rules.add(ComplianceRule.advisory(
+                        "COGNITO-AUDIT-TRAIL",
+                        "CloudTrail recommended for Cognito sign-in audit visibility but not required for " + complianceFrameworks,
+                        "Enable CloudTrail so Cognito sign-in events are captured for audit purposes."
+                    ));
+                } else {
+                    rules.add(ComplianceRule.pass(
+                        "COGNITO-AUDIT-TRAIL",
+                        "CloudTrail enabled -- Cognito sign-ins are captured as management events"
+                    ));
+                }
+            }
+
             // Password policy
             int minPasswordLength = config.getMinimumPasswordLength();
             rules.add(ComplianceRule.check(
@@ -334,6 +370,11 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
             return true;
         }
 
+        // Cognito sign-in audit trail (CloudTrail) is blocking - can be configured via CDK
+        if (ruleDescription.contains("Cognito sign-ins require CloudTrail") && (requiresPciDss || requiresHipaa)) {
+            return true;
+        }
+
         // Root account MFA is ADVISORY - requires manual AWS console action
         // Credential rotation is ADVISORY - requires organization-wide policy
         // Access key management is ADVISORY - requires manual IAM management
@@ -351,12 +392,15 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
      * {@code ROOT_ACCOUNT_PROTECTION}, and {@code CREDENTIAL_ROTATION} respectively -- all already
      * claimed via the sibling check in the same method that does call the matrix directly.
      * PASSWORD-POLICY is a conditional check with no corresponding matrix control (password length
-     * is not modeled separately from {@code AUTHENTICATION}) and is not claimed.
+     * is not modeled separately from {@code AUTHENTICATION}) and is not claimed. COGNITO-AUDIT-TRAIL
+     * claims {@code AUDIT_LOGGING}, already claimed by {@link ElbSecurityRules} for ALB/ELB access
+     * logs -- both claims are valid simultaneously, each covering a different audit-logging surface.
      */
     @Override
     public Set<String> claimedControls() {
         return ClaimedControls.of(
-            SecurityControl.ACCESS_CONTROL, SecurityControl.AUTHENTICATION, SecurityControl.ROOT_ACCOUNT_PROTECTION, SecurityControl.CREDENTIAL_ROTATION
+            SecurityControl.ACCESS_CONTROL, SecurityControl.AUTHENTICATION, SecurityControl.ROOT_ACCOUNT_PROTECTION,
+            SecurityControl.CREDENTIAL_ROTATION, SecurityControl.AUDIT_LOGGING
         );
     }
 }
