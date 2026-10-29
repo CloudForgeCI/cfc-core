@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.compute;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.scaling.ScalingFactory;
 import com.cloudforgeci.api.storage.ContainerFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
@@ -22,7 +23,6 @@ import software.amazon.awscdk.services.efs.AccessPoint;
 import software.amazon.awscdk.services.iam.Role;
 import software.constructs.Construct;
 import io.github.cdklabs.cdknag.NagSuppressions;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
 import java.util.logging.Logger;
@@ -263,11 +263,9 @@ public class FargateFactory extends BaseFactory {
 
     // Add CDK-nag suppressions for standard ECS patterns
     NagSuppressions.addResourceSuppressions(taskDef, List.of(
-        NagPackSuppression.builder()
-            .id("AwsSolutions-ECS2")
-            .reason("Environment variables are used for non-sensitive container configuration. " +
+        NagSuppress.of("AwsSolutions-ECS2",
+            "Environment variables are used for non-sensitive container configuration. " +
                     "Sensitive values like secrets use AWS Secrets Manager references.")
-            .build()
     ), true);
 
     // Validate that EFS and Access Point are available (created by EfsFactory)

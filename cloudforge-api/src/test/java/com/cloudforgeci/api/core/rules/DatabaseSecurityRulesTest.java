@@ -45,10 +45,8 @@ class DatabaseSecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestDbSecDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing database security rules
         // Then: Should not throw (advisory for DEV)
@@ -61,10 +59,8 @@ class DatabaseSecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestDbSecProd", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -88,10 +84,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsMultiAz", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -112,10 +106,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("dynamoDbPitrEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -138,10 +130,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsEnhancedMonitoringEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing database security rules
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -164,10 +154,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         List<ComplianceRule> rules = new DatabaseSecurityRules().validateDatabaseMonitoring(ctx);
 
@@ -184,10 +172,8 @@ class DatabaseSecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestDbSecValidation", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing database security rules
         new DatabaseSecurityRules().install(ctx);
@@ -210,10 +196,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsKmsKeyArn", "arn:aws:kms:us-east-1:123456789012:key/12345");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure encryption at rest
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -233,10 +217,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsRequireSsl", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should require SSL for connections
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -257,10 +239,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsPreferredBackupWindow", "03:00-04:00");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure automated backups
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -279,10 +259,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("dynamoDbPitrEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable point-in-time recovery
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -303,10 +281,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("dbGeneralLogEnabled", "false");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure database audit logging
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -325,10 +301,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsIAMAuthenticationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable IAM authentication
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -347,10 +321,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsMultiAz", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable Multi-AZ deployment
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -369,10 +341,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsDeletionProtection", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable deletion protection
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -392,10 +362,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsRotateCredentials", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should use Secrets Manager for credentials
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -416,10 +384,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsSubnetType", "private");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should deploy in private subnets
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -449,10 +415,8 @@ class DatabaseSecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestDatabaseSecurityIdempotent", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing rules multiple times
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -475,10 +439,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("dbActivityStreamsKmsKey", "arn:aws:kms:us-east-1:123456789012:key/12345");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should enable database activity streams
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -499,10 +461,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsSnapshotEncrypted", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should encrypt database snapshots
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -523,10 +483,8 @@ class DatabaseSecurityRulesTest {
         cfcContext.put("rdsLogDisconnections", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should apply secure parameter group settings
         assertDoesNotThrow(() -> new DatabaseSecurityRules().install(ctx));
@@ -625,17 +583,13 @@ class DatabaseSecurityRulesTest {
         // DEV is advisory only - never fails
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", RDS=" + rdsEnabled +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", RDS=" + rdsEnabled +
+                ", encryption=" + encryption + ", backup=" + backup + ", multiAz=" + multiAz +
+                ", retention=" + retentionDays + ", autoUpgrade=" + autoUpgrade,
+            "Expected validation to pass for: " + profile + ", RDS=" + rdsEnabled +
                 ", encryption=" + encryption + ", backup=" + backup + ", multiAz=" + multiAz +
                 ", retention=" + retentionDays + ", autoUpgrade=" + autoUpgrade);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", RDS=" + rdsEnabled +
-                ", encryption=" + encryption + ", backup=" + backup + ", multiAz=" + multiAz +
-                ", retention=" + retentionDays + ", autoUpgrade=" + autoUpgrade);
-        }
     }
 
     /**
@@ -710,15 +664,11 @@ class DatabaseSecurityRulesTest {
         }
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", DynamoDB=" + dynamoDbEnabled +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", DynamoDB=" + dynamoDbEnabled +
+                ", encryption=" + encryption + ", pitr=" + pitr,
+            "Expected validation to pass for: " + profile + ", DynamoDB=" + dynamoDbEnabled +
                 ", encryption=" + encryption + ", pitr=" + pitr);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", DynamoDB=" + dynamoDbEnabled +
-                ", encryption=" + encryption + ", pitr=" + pitr);
-        }
     }
 
     /**
@@ -814,17 +764,13 @@ class DatabaseSecurityRulesTest {
         // STAGING and DEV are advisory for monitoring (don't fail)
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + ", RDS=" + rdsEnabled +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + ", RDS=" + rdsEnabled +
+                ", activityStreams=" + activityStreams + ", performanceInsights=" + performanceInsights +
+                ", piEncrypted=" + piEncrypted + ", enhancedMonitoring=" + enhancedMonitoring,
+            "Expected validation to pass for: " + profile + ", RDS=" + rdsEnabled +
                 ", activityStreams=" + activityStreams + ", performanceInsights=" + performanceInsights +
                 ", piEncrypted=" + piEncrypted + ", enhancedMonitoring=" + enhancedMonitoring);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + ", RDS=" + rdsEnabled +
-                ", activityStreams=" + activityStreams + ", performanceInsights=" + performanceInsights +
-                ", piEncrypted=" + piEncrypted + ", enhancedMonitoring=" + enhancedMonitoring);
-        }
     }
 
     /**
@@ -962,13 +908,9 @@ class DatabaseSecurityRulesTest {
         }
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for comprehensive scenario: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for comprehensive scenario: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for comprehensive scenario: " + profile,
+            "Expected validation to pass for comprehensive scenario: " + profile);
     }
 
     @ParameterizedTest
@@ -1026,13 +968,9 @@ class DatabaseSecurityRulesTest {
         }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected RDS backup retention validation to fail for: " + backupRetentionDays + " days");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected RDS backup retention validation to pass for: " + backupRetentionDays + " days");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected RDS backup retention validation to fail for: " + backupRetentionDays + " days",
+            "Expected RDS backup retention validation to pass for: " + backupRetentionDays + " days");
     }
 
     @ParameterizedTest
@@ -1095,13 +1033,9 @@ class DatabaseSecurityRulesTest {
         }
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected Performance Insights encryption validation to fail");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected Performance Insights encryption validation to pass");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected Performance Insights encryption validation to fail",
+            "Expected Performance Insights encryption validation to pass");
     }
 
     @ParameterizedTest
@@ -1157,13 +1091,9 @@ class DatabaseSecurityRulesTest {
         builder.createMockDbConnection();
         new DatabaseSecurityRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected RDS HA validation to fail");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected RDS HA validation to pass");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected RDS HA validation to fail",
+            "Expected RDS HA validation to pass");
     }
 
     // ==================== DECOY-NAME FIX / REAL-SIGNAL COVERAGE ====================

@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.security;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.AuthMode;
@@ -23,7 +24,6 @@ import software.amazon.awscdk.services.secretsmanager.Secret;
 import software.amazon.awscdk.services.secretsmanager.SecretStringGenerator;
 import software.constructs.Construct;
 
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 
 import java.util.List;
@@ -487,12 +487,10 @@ public class CognitoAuthenticationFactory extends BaseFactory {
             NagSuppressions.addResourceSuppressions(
                 userPool,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-COG3")
-                        .reason("AdvancedSecurityMode is intentionally disabled for DEV/non-production " +
+                    NagSuppress.of("AwsSolutions-COG3",
+                        "AdvancedSecurityMode is intentionally disabled for DEV/non-production " +
                                 "environments to reduce costs. Cognito Plus tier is required for ENFORCED mode. " +
                                 "Production deployments enable AdvancedSecurityMode for enhanced threat protection.")
-                        .build()
                 ),
                 Boolean.TRUE
             );
@@ -1397,12 +1395,10 @@ public class CognitoAuthenticationFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             cognitoSecret,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-SMG4")
-                    .reason("Cognito User Pool Client secrets are managed by AWS Cognito, not Secrets Manager. " +
+                NagSuppress.of("AwsSolutions-SMG4",
+                    "Cognito User Pool Client secrets are managed by AWS Cognito, not Secrets Manager. " +
                            "This secret is a synchronized copy for application use. Rotation requires regenerating " +
                            "the Cognito client and updating all dependent ALB OIDC actions and applications.")
-                    .build()
             ),
             Boolean.TRUE
         );

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Advanced security monitoring and compliance dashboard validation rules.
@@ -167,9 +168,9 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
             // Security Hub standards enabled (advisory - best practice recommendation)
             if (securityHubEnabled) {
-                boolean pciDssStandardEnabled = getBooleanSetting(ctx, "securityHubPciDssEnabled", false);
-                boolean cisStandardEnabled = getBooleanSetting(ctx, "securityHubCisEnabled", false);
-                boolean awsFoundationalEnabled = getBooleanSetting(ctx, "securityHubAwsFoundationalEnabled", true);
+                boolean pciDssStandardEnabled = RuleSettings.contextValue(ctx, "securityHubPciDssEnabled", false);
+                boolean cisStandardEnabled = RuleSettings.contextValue(ctx, "securityHubCisEnabled", false);
+                boolean awsFoundationalEnabled = RuleSettings.contextValue(ctx, "securityHubAwsFoundationalEnabled", true);
 
                 // Check if at least one standard is enabled (advisory recommendation)
                 if (!pciDssStandardEnabled && !cisStandardEnabled && !awsFoundationalEnabled) {
@@ -186,7 +187,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                 }
 
                 // Automated response actions (advisory only)
-                boolean securityHubAutoRemediation = getBooleanSetting(ctx, "securityHubAutoRemediation", securityMonitoringEnabled);
+                boolean securityHubAutoRemediation = RuleSettings.contextValue(ctx, "securityHubAutoRemediation", securityMonitoringEnabled);
 
                 if (securityHubAutoRemediation) {
                     rules.add(ComplianceRule.pass(
@@ -283,8 +284,8 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
 
             // Inspector scan types
             if (inspectorEnabled) {
-                boolean inspectorEc2Scanning = getBooleanSetting(ctx, "inspectorEc2Scanning", true);
-                boolean inspectorEcrScanning = getBooleanSetting(ctx, "inspectorEcrScanning", true);
+                boolean inspectorEc2Scanning = RuleSettings.contextValue(ctx, "inspectorEc2Scanning", true);
+                boolean inspectorEcrScanning = RuleSettings.contextValue(ctx, "inspectorEcrScanning", true);
 
                 if (inspectorEc2Scanning || inspectorEcrScanning) {
                     rules.add(ComplianceRule.pass(
@@ -294,7 +295,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                 }
 
                 // Continuous scanning (advisory - best practice recommendation)
-                boolean inspectorContinuousScanning = getBooleanSetting(ctx, "inspectorContinuousScanning", securityMonitoringEnabled);
+                boolean inspectorContinuousScanning = RuleSettings.contextValue(ctx, "inspectorContinuousScanning", securityMonitoringEnabled);
 
                 if (inspectorContinuousScanning) {
                     rules.add(ComplianceRule.pass(
@@ -361,23 +362,16 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                     "Amazon Macie is recommended for GDPR/HIPAA data discovery",
                     "Set macieEnabled = true in deployment context."
                 ));
-            } else if (!macieEnabled) {
-                rules.add(ComplianceRule.fail(
-                    "MACIE-ENABLED",
-                    "Amazon Macie required for GDPR/HIPAA data discovery",
-                    "MacieEnabled",
-                    "Enable Macie to discover and protect sensitive data (PII, PHI) in S3. " +
+            } else rules.add(ComplianceRule.check(
+     macieEnabled,
+     "MACIE-ENABLED",
+     "Amazon Macie enabled for sensitive data discovery",
+     "Amazon Macie required for GDPR/HIPAA data discovery",
+     "MacieEnabled",
+     "Enable Macie to discover and protect sensitive data (PII, PHI) in S3. " +
                     "GDPR Art.25 (data protection by design), Art.30 (records of processing). " +
                     "HIPAA §164.308(a)(1)(ii)(A) (risk analysis). " +
-                    "Set macieEnabled = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "MACIE-ENABLED",
-                    "Amazon Macie enabled for sensitive data discovery",
-                    "MacieEnabled"
-                ));
-            }
+                    "Set macieEnabled = true in deployment context."));
 
             // Automated discovery jobs
             if (macieEnabled) {
@@ -391,19 +385,14 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
                         "Automated sensitive data discovery jobs are recommended",
                         "Set macieAutomatedDiscovery = true when jobs are scheduled."
                     ));
-                } else if (!macieAutomatedDiscovery) {
-                    rules.add(ComplianceRule.fail(
-                        "MACIE-AUTOMATED-DISCOVERY",
-                        "Automated sensitive data discovery jobs required",
-                        "Configure automated Macie discovery jobs for all S3 buckets. " +
-                        "Set macieAutomatedDiscovery = true when jobs are scheduled."
-                    ));
-                } else {
-                    rules.add(ComplianceRule.pass(
-                        "MACIE-AUTOMATED-DISCOVERY",
-                        "Macie automated discovery jobs enabled"
-                    ));
-                }
+                } else rules.add(ComplianceRule.check(
+     macieAutomatedDiscovery,
+     "MACIE-AUTOMATED-DISCOVERY",
+     "Macie automated discovery jobs enabled",
+     "Automated sensitive data discovery jobs required",
+     null,
+     "Configure automated Macie discovery jobs for all S3 buckets. " +
+                        "Set macieAutomatedDiscovery = true when jobs are scheduled."));
             }
         } else if (macieEnabled) {
             rules.add(ComplianceRule.pass(
@@ -440,7 +429,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
 
         // CloudWatch dashboard for compliance
-        boolean complianceDashboardEnabled = getBooleanSetting(ctx, "complianceDashboardEnabled", securityMonitoringEnabled);
+        boolean complianceDashboardEnabled = RuleSettings.contextValue(ctx, "complianceDashboardEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (!complianceDashboardEnabled) {
@@ -459,7 +448,7 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
         }
 
         // Security alerting (SNS topics)
-        boolean securityAlertingEnabled = getBooleanSetting(ctx, "securityAlertingEnabled", securityMonitoringEnabled);
+        boolean securityAlertingEnabled = RuleSettings.contextValue(ctx, "securityAlertingEnabled", securityMonitoringEnabled);
 
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
             if (!securityAlertingEnabled) {
@@ -481,18 +470,6 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. Security Hub standards
      * selection, Security Hub auto-remediation, Inspector scan types/continuous scanning, the
@@ -501,8 +478,8 @@ public class AdvancedMonitoringRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "SECURITY_HUB", "VULNERABILITY_SCANNING", "SENSITIVE_DATA_DISCOVERY"
+        return ClaimedControls.of(
+            SecurityControl.SECURITY_HUB, SecurityControl.VULNERABILITY_SCANNING, SecurityControl.SENSITIVE_DATA_DISCOVERY
         );
     }
 }

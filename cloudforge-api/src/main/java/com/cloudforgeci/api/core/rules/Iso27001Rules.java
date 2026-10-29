@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * ISO/IEC 27001:2022 Information Security Management compliance validation.
@@ -108,18 +109,13 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         );
 
         // A.8.16 - Monitoring Activities (network access monitoring)
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.16",
-                "Network access monitoring required (ISO 27001 A.8.16)",
-                "Enable security monitoring for network access control"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.16",
-                "Network access monitoring enabled (ISO 27001 A.8.16)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "ISO-27001-A.8.16",
+            "Network access monitoring enabled (ISO 27001 A.8.16)",
+            "Network access monitoring required (ISO 27001 A.8.16)",
+            null,
+            "Enable security monitoring for network access control"));
 
         // A.8.26 - Application Security Requirements (WAF)
         if (!config.isWafEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
@@ -149,45 +145,30 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
         // A.8.24 - Use of Cryptography (data at rest)
-        if (!config.isEbsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.24-EBS",
-                "EBS encryption required (ISO 27001 A.8.24)",
-                "Enable EBS encryption for data at rest"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.24-EBS",
-                "EBS encryption enabled (ISO 27001 A.8.24)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEbsEncryptionEnabled(),
+            "ISO-27001-A.8.24-EBS",
+            "EBS encryption enabled (ISO 27001 A.8.24)",
+            "EBS encryption required (ISO 27001 A.8.24)",
+            null,
+            "Enable EBS encryption for data at rest"));
 
-        if (!config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.24-EFS-Rest",
-                "EFS encryption at rest required (ISO 27001 A.8.24)",
-                "Enable EFS encryption at rest"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.24-EFS-Rest",
-                "EFS encryption at rest enabled (ISO 27001 A.8.24)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionAtRestEnabled(),
+            "ISO-27001-A.8.24-EFS-Rest",
+            "EFS encryption at rest enabled (ISO 27001 A.8.24)",
+            "EFS encryption at rest required (ISO 27001 A.8.24)",
+            null,
+            "Enable EFS encryption at rest"));
 
         // A.8.24 - Use of Cryptography (data in transit)
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.24-EFS-Transit",
-                "EFS encryption in transit required (ISO 27001 A.8.24)",
-                "Enable EFS encryption in transit (TLS)"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.24-EFS-Transit",
-                "EFS encryption in transit enabled (ISO 27001 A.8.24)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "ISO-27001-A.8.24-EFS-Transit",
+            "EFS encryption in transit enabled (ISO 27001 A.8.24)",
+            "EFS encryption in transit required (ISO 27001 A.8.24)",
+            null,
+            "Enable EFS encryption in transit (TLS)"));
 
         return rules;
     }
@@ -203,18 +184,13 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
         // A.8.15 - Logging (event logging)
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.15",
-                "CloudTrail logging required (ISO 27001 A.8.15)",
-                "Enable CloudTrail for API event tracking"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.15",
-                "CloudTrail logging enabled (ISO 27001 A.8.15)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "ISO-27001-A.8.15",
+            "CloudTrail logging enabled (ISO 27001 A.8.15)",
+            "CloudTrail logging required (ISO 27001 A.8.15)",
+            null,
+            "Enable CloudTrail for API event tracking"));
 
         // A.8.16 - Monitoring Activities (threat detection)
         if (!config.isGuardDutyEnabled() && (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING)) {
@@ -246,20 +222,13 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
         var config = ctx.securityProfileConfig.get().orElseThrow();
 
         // A.8.16 - Monitoring Activities (network traffic)
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "ISO-27001-A.8.16-NetworkTraffic",
-                "Network traffic logging required (ISO 27001 A.8.16)",
-                "VpcFlowLogsEnabled",
-                "Enable VPC Flow Logs for network traffic monitoring"
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "ISO-27001-A.8.16-NetworkTraffic",
-                "Network traffic logging enabled (ISO 27001 A.8.16)",
-                "VpcFlowLogsEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "ISO-27001-A.8.16-NetworkTraffic",
+            "Network traffic logging enabled (ISO 27001 A.8.16)",
+            "Network traffic logging required (ISO 27001 A.8.16)",
+            "VpcFlowLogsEnabled",
+            "Enable VPC Flow Logs for network traffic monitoring"));
 
         return rules;
     }
@@ -299,10 +268,10 @@ public class Iso27001Rules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "SECURITY_MONITORING", "WAF_PROTECTION", "ENCRYPTION_AT_REST",
-            "ENCRYPTION_IN_TRANSIT", "AUDIT_LOGGING", "THREAT_DETECTION",
-            "NETWORK_FLOW_LOGS", "HIGH_AVAILABILITY"
+        return ClaimedControls.of(
+            SecurityControl.SECURITY_MONITORING, SecurityControl.WAF_PROTECTION, SecurityControl.ENCRYPTION_AT_REST,
+            SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.AUDIT_LOGGING, SecurityControl.THREAT_DETECTION,
+            SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.HIGH_AVAILABILITY
         );
     }
 }

@@ -52,23 +52,16 @@ import java.util.Map;
     websiteUrl = "https://bagisto.com",
     defaultImage = "php:8.2-fpm-alpine"
 )
-public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
+public class BagistoApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "bagisto";
     // The -apache image bundles Apache + mod_php and serves port 80. The fpm-alpine variant has no
     // web server (PHP-FPM speaks FastCGI on 9000 only), so the ALB health check on port 80 would
     // never pass. Same approach as the ConcreteCms, Dolphin, MyBB, and PhpBB specs.
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
-    protected static final int APPLICATION_PORT = 80;
     protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/bagisto";
-    protected static final String VOLUME_NAME = "bagistoData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "pdo_mysql", "gd", "curl", "mbstring", "xml", "dom",
         "zip", "intl", "json", "opcache", "redis", "imagick",
@@ -78,48 +71,8 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/";
     }
 
     @Override
@@ -128,11 +81,6 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -174,21 +122,6 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public int phpUploadMaxFilesize() {
-        return 64;
-    }
-
-    @Override
-    public int phpPostMaxSize() {
-        return 64;
-    }
-
-    @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
-    }
-
-    @Override
     public String s3MediaPlugin() {
         return "league/flysystem-aws-s3-v3"; // Laravel Filesystem
     }
@@ -196,11 +129,6 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/storage/app/public";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -213,28 +141,8 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Laravel native Redis support
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -245,23 +153,8 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return true;
-    }
-
-    @Override
     public String multisiteMode() {
         return "domain"; // Multi-inventory/channel support
-    }
-
-    @Override
-    public String cmsCategory() {
-        return "ecommerce";
-    }
-
-    @Override
-    public String preferredWebServer() {
-        return "nginx";
     }
 
     @Override
@@ -297,16 +190,6 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== EC2 Configuration ==========
 
     @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
-
-    @Override
     public List<String> ec2LogPaths() {
         return List.of(
             "/var/log/nginx/access.log",
@@ -334,17 +217,7 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'Node.js installed' >> /var/log/userdata.log"
         );
 
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         builder.addCommands(
             "# Install Bagisto",
@@ -369,9 +242,7 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'Bagisto installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override
@@ -398,11 +269,6 @@ public class BagistoApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new BagistoOidcIntegration();
-    }
-
-    @Override
-    public List<String> getSupportedAuthModes() {
-        return List.of("alb-oidc", "none");
     }
 
     // ========== Path-Based Authentication ==========

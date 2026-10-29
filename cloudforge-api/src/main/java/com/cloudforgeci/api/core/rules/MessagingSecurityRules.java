@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Messaging security compliance validation rules.
@@ -154,20 +155,15 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
             }
 
             // Kinesis encryption (if applicable)
-            boolean kinesisEncryption = getBooleanSetting(ctx, "kinesisEncryption", true);
-            if (!kinesisEncryption) {
-                rules.add(ComplianceRule.fail(
-                    "KINESIS-ENCRYPTION",
-                    "Kinesis streams should use KMS encryption",
-                    "Enable KMS encryption for Kinesis data streams. " +
-                    "Set kinesisEncryption = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "KINESIS-ENCRYPTION",
-                    "Kinesis encryption configured"
-                ));
-            }
+            boolean kinesisEncryption = RuleSettings.accessorValue(ctx, "kinesisEncryption", true);
+            rules.add(ComplianceRule.check(
+                kinesisEncryption,
+                "KINESIS-ENCRYPTION",
+                "Kinesis encryption configured",
+                "Kinesis streams should use KMS encryption",
+                null,
+                "Enable KMS encryption for Kinesis data streams. " +
+                    "Set kinesisEncryption = true in deployment context."));
         }
 
         return rules;
@@ -192,37 +188,27 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            boolean secretsRotation = getBooleanSetting(ctx, "secretsRotationEnabled", false);
-            if (!secretsRotation && rotationResult == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "SECRETS-ROTATION",
-                    "Secrets rotation required for " + complianceFrameworks,
-                    "Configure automatic secrets rotation (90 days or less). " +
+            boolean secretsRotation = RuleSettings.accessorValue(ctx, "secretsRotationEnabled", false);
+            rules.add(ComplianceRule.check(
+                !(!secretsRotation && rotationResult == ComplianceMatrix.ValidationResult.FAIL),
+                "SECRETS-ROTATION",
+                "Secrets rotation configured or not required",
+                "Secrets rotation required for " + complianceFrameworks,
+                null,
+                "Configure automatic secrets rotation (90 days or less). " +
                     "Required for PCI-DSS Req 8.2.4. " +
-                    "Set secretsRotationEnabled = true when rotation is configured."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "SECRETS-ROTATION",
-                    "Secrets rotation configured or not required"
-                ));
-            }
+                    "Set secretsRotationEnabled = true when rotation is configured."));
 
             // Secrets Manager KMS encryption
-            boolean secretsKmsEncryption = getBooleanSetting(ctx, "secretsKmsEncryption", true);
-            if (!secretsKmsEncryption) {
-                rules.add(ComplianceRule.fail(
-                    "SECRETS-KMS-ENCRYPTION",
-                    "Secrets Manager should use customer-managed KMS keys",
-                    "Configure Secrets Manager secrets with customer-managed KMS keys. " +
-                    "Set secretsKmsEncryption = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "SECRETS-KMS-ENCRYPTION",
-                    "Secrets Manager KMS encryption configured"
-                ));
-            }
+            boolean secretsKmsEncryption = RuleSettings.accessorValue(ctx, "secretsKmsEncryption", true);
+            rules.add(ComplianceRule.check(
+                secretsKmsEncryption,
+                "SECRETS-KMS-ENCRYPTION",
+                "Secrets Manager KMS encryption configured",
+                "Secrets Manager should use customer-managed KMS keys",
+                null,
+                "Configure Secrets Manager secrets with customer-managed KMS keys. " +
+                    "Set secretsKmsEncryption = true in deployment context."));
         }
 
         return rules;
@@ -236,21 +222,16 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
 
         // Dead letter queue configuration for production
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean dlqConfigured = getBooleanSetting(ctx, "deadLetterQueueEnabled", false);
+            boolean dlqConfigured = RuleSettings.accessorValue(ctx, "deadLetterQueueEnabled", false);
 
-            if (!dlqConfigured) {
-                rules.add(ComplianceRule.fail(
-                    "DLQ-CONFIGURATION",
-                    "Dead letter queues recommended for production messaging",
-                    "Configure dead letter queues for SQS and EventBridge targets. " +
-                    "Set deadLetterQueueEnabled = true when DLQs are configured."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "DLQ-CONFIGURATION",
-                    "Dead letter queues configured"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                dlqConfigured,
+                "DLQ-CONFIGURATION",
+                "Dead letter queues configured",
+                "Dead letter queues recommended for production messaging",
+                null,
+                "Configure dead letter queues for SQS and EventBridge targets. " +
+                    "Set deadLetterQueueEnabled = true when DLQs are configured."));
         }
 
         return rules;
@@ -280,19 +261,6 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. MESSAGING-ENCRYPTION now
      * reads {@code config.isSnsKmsEncryptionEnabled()} directly (previously used S3 bucket
@@ -305,8 +273,8 @@ public class MessagingSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "SNS_KMS_ENCRYPTION"
+        return ClaimedControls.of(
+            SecurityControl.SNS_KMS_ENCRYPTION
         );
     }
 }

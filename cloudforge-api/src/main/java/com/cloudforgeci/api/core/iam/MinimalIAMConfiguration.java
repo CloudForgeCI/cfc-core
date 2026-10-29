@@ -1,12 +1,10 @@
 package com.cloudforgeci.api.core.iam;
 
 import com.cloudforge.core.enums.IAMProfile;
-import com.cloudforge.core.enums.RuntimeType;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.interfaces.IAMConfiguration;
-import com.cloudforgeci.api.interfaces.Rule;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -14,8 +12,6 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 
 import java.util.List;
-
-import static com.cloudforgeci.api.core.rules.RuleKit.require;
 
 /**
  * Minimal IAM configuration with least privilege permissions.
@@ -27,7 +23,7 @@ import static com.cloudforgeci.api.core.rules.RuleKit.require;
  * - Resource-specific permissions (no wildcards)
  * - Minimal CloudWatch permissions
  */
-public final class MinimalIAMConfiguration implements IAMConfiguration {
+public final class MinimalIAMConfiguration extends AbstractIAMConfiguration {
 
     @Override
     public IAMProfile kind() {
@@ -35,42 +31,17 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
     }
 
     @Override
-    public String id() {
-        return "iam:MINIMAL";
+    protected boolean requiresEfsSecurityGroup() {
+        return false;
     }
 
     @Override
-    public List<Rule> rules(SystemContext c) {
-        var rules = new java.util.ArrayList<Rule>();
-        rules.add(require("vpc", x -> x.vpc));
-
-        // Instance security group is only required for EC2 runtime
-        if (c.runtime == RuntimeType.EC2) {
-            rules.add(require("instance security group", x -> x.instanceSg));
-        }
-
-        rules.add(require("alb security group", x -> x.albSg));
-        return rules;
-    }
-
-    @Override
-    public void wire(SystemContext c) {
-        // Create minimal IAM roles based on runtime type
-        if (c.runtime == RuntimeType.EC2) {
-            createMinimalEC2Role(c);
-        } else if (c.runtime == RuntimeType.FARGATE) {
-            createMinimalFargateRoles(c);
-        }
-    }
-
-    private void createMinimalEC2Role(SystemContext c) {
+    protected void createEc2Role(SystemContext c) {
         // Get account ID from stack
-        String accountId = software.amazon.awscdk.Stack.of(c).getAccount();
+        String accountId = accountId(c);
 
         // Use stackName for application-aware log paths
-        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? "/aws/*/" + c.stackName + "*"
-                : "/aws/*";
+        String appLogPattern = logGroupPattern(c);
 
         // For PRODUCTION, use Customer Managed Policy (not inline, not AWS managed)
         if (c.security == SecurityProfile.PRODUCTION) {
@@ -106,10 +77,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 ssmPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("SSM requires s3:GetObject on AWS-managed SSM buckets (aws-ssm-*, amazon-ssm-*, aws-windows-downloads-*) - these are AWS service requirements, not application data")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "SSM requires s3:GetObject on AWS-managed SSM buckets (aws-ssm-*, amazon-ssm-*, aws-windows-downloads-*) - these are AWS service requirements, not application data")
                 ),
                 Boolean.TRUE
             );
@@ -141,10 +110,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 cloudwatchPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("CloudWatch Logs requires wildcard in log group path (/aws/*/) to allow logging to application-specific log groups created at runtime")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "CloudWatch Logs requires wildcard in log group path (/aws/*/) to allow logging to application-specific log groups created at runtime")
                 ),
                 Boolean.TRUE
             );
@@ -171,12 +138,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 ec2Role,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM4")
-                        .reason("AmazonSSMManagedInstanceCore is an AWS-managed policy required for " +
+                    NagSuppress.of("AwsSolutions-IAM4",
+                        "AmazonSSMManagedInstanceCore is an AWS-managed policy required for " +
                                 "EC2 instances to use Systems Manager. It provides minimal permissions " +
                                 "for SSM connectivity and is AWS-recommended for all EC2 deployments.")
-                        .build()
                 ),
                 Boolean.TRUE
             );
@@ -205,14 +170,13 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
         }
     }
 
-    private void createMinimalFargateRoles(SystemContext c) {
+    @Override
+    protected void createFargateRoles(SystemContext c) {
         // Get account ID from stack
-        String accountId = software.amazon.awscdk.Stack.of(c).getAccount();
+        String accountId = accountId(c);
 
         // Use stackName for application-aware log paths
-        String appLogPattern = c.stackName != null && !c.stackName.isEmpty()
-                ? "/aws/*/" + c.stackName + "*"
-                : "/aws/*";
+        String appLogPattern = logGroupPattern(c);
 
         // For PRODUCTION, use Customer Managed Policies (not inline, not AWS managed)
         if (c.security == SecurityProfile.PRODUCTION) {
@@ -306,10 +270,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 executionPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("ECR GetAuthorizationToken and CloudWatch Logs patterns require wildcards - AWS service requirements")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "ECR GetAuthorizationToken and CloudWatch Logs patterns require wildcards - AWS service requirements")
                 ),
                 Boolean.TRUE
             );
@@ -317,10 +279,8 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 taskPolicy,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("CloudWatch Logs requires wildcard in log group path for application logging")
-                        .build()
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "CloudWatch Logs requires wildcard in log group path for application logging")
                 ),
                 Boolean.TRUE
             );
@@ -341,12 +301,10 @@ public final class MinimalIAMConfiguration implements IAMConfiguration {
             NagSuppressions.addResourceSuppressions(
                 executionRole,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM4")
-                        .reason("AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
+                    NagSuppress.of("AwsSolutions-IAM4",
+                        "AmazonECSTaskExecutionRolePolicy is an AWS-managed policy specifically " +
                                 "designed for ECS task execution. It provides minimal required permissions " +
                                 "for pulling container images from ECR and writing logs to CloudWatch.")
-                        .build()
                 ),
                 Boolean.TRUE
             );
