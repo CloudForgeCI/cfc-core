@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * IAM security compliance validation rules.
@@ -114,35 +115,25 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            if (result == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "IAM-ACCESS-CONTROL",
-                    "IAM role-based access control required for " + complianceFrameworks,
-                    "Configure IAM roles with least privilege permissions. " +
-                    "Required for PCI-DSS Req 7.1 and HIPAA access controls."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "IAM-ACCESS-CONTROL",
-                    "IAM access control configured"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(result == ComplianceMatrix.ValidationResult.FAIL),
+                "IAM-ACCESS-CONTROL",
+                "IAM access control configured",
+                "IAM role-based access control required for " + complianceFrameworks,
+                null,
+                "Configure IAM roles with least privilege permissions. " +
+                    "Required for PCI-DSS Req 7.1 and HIPAA access controls."));
 
             // Check for overly permissive policies (advisory)
-            boolean leastPrivilegeReviewed = getBooleanSetting(ctx, "leastPrivilegeReviewed", false);
-            if (!leastPrivilegeReviewed) {
-                rules.add(ComplianceRule.fail(
-                    "IAM-LEAST-PRIVILEGE",
-                    "IAM policies should follow least privilege principle",
-                    "Review IAM policies to ensure no wildcards (*) in Actions or Resources. " +
-                    "Set leastPrivilegeReviewed = true after review."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "IAM-LEAST-PRIVILEGE",
-                    "IAM least privilege review completed"
-                ));
-            }
+            boolean leastPrivilegeReviewed = RuleSettings.accessorValue(ctx, "leastPrivilegeReviewed", false);
+            rules.add(ComplianceRule.check(
+                leastPrivilegeReviewed,
+                "IAM-LEAST-PRIVILEGE",
+                "IAM least privilege review completed",
+                "IAM policies should follow least privilege principle",
+                null,
+                "Review IAM policies to ensure no wildcards (*) in Actions or Resources. " +
+                    "Set leastPrivilegeReviewed = true after review."));
         }
 
         return rules;
@@ -173,37 +164,26 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            if (result == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "MFA-REQUIRED",
-                    "Multi-factor authentication required for " + complianceFrameworks,
-                    "MfaRequired",
-                    "Enable MFA for user authentication. " +
+            rules.add(ComplianceRule.check(
+                !(result == ComplianceMatrix.ValidationResult.FAIL),
+                "MFA-REQUIRED",
+                "Multi-factor authentication configured",
+                "Multi-factor authentication required for " + complianceFrameworks,
+                "MfaRequired",
+                "Enable MFA for user authentication. " +
                     "Required for PCI-DSS Req 8.3 and HIPAA §164.312(d). " +
-                    "Set mfaRequired = true in security profile."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "MFA-REQUIRED",
-                    "Multi-factor authentication configured"
-                ));
-            }
+                    "Set mfaRequired = true in security profile."));
 
             // Password policy
             int minPasswordLength = config.getMinimumPasswordLength();
-            if (minPasswordLength < 12) {
-                rules.add(ComplianceRule.fail(
-                    "PASSWORD-POLICY",
-                    "Minimum password length should be 12+ characters for production",
-                    "Configure minimum password length of 12+ characters. " +
-                    "NIST SP 800-63B recommends 12+ character passwords."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "PASSWORD-POLICY",
-                    "Password policy meets requirements"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(minPasswordLength < 12),
+                "PASSWORD-POLICY",
+                "Password policy meets requirements",
+                "Minimum password length should be 12+ characters for production",
+                null,
+                "Configure minimum password length of 12+ characters. " +
+                    "NIST SP 800-63B recommends 12+ character passwords."));
         }
 
         return rules;
@@ -220,7 +200,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
 
         // Root account protection
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean rootMfaEnabled = getBooleanSetting(ctx, "rootMfaEnabled", false);
+            boolean rootMfaEnabled = RuleSettings.accessorValue(ctx, "rootMfaEnabled", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.ROOT_ACCOUNT_PROTECTION,
@@ -252,21 +232,16 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
             }
 
             // Root access key check
-            boolean rootAccessKeysDisabled = getBooleanSetting(ctx, "rootAccessKeysDisabled", false);
-            if (!rootAccessKeysDisabled) {
-                rules.add(ComplianceRule.fail(
-                    "ROOT-ACCESS-KEYS",
-                    "Root account access keys should be disabled",
-                    "Remove access keys from the root account. " +
+            boolean rootAccessKeysDisabled = RuleSettings.accessorValue(ctx, "rootAccessKeysDisabled", false);
+            rules.add(ComplianceRule.check(
+                rootAccessKeysDisabled,
+                "ROOT-ACCESS-KEYS",
+                "Root account access keys disabled",
+                "Root account access keys should be disabled",
+                null,
+                "Remove access keys from the root account. " +
                     "Use IAM roles for programmatic access. " +
-                    "Set rootAccessKeysDisabled = true after removal."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "ROOT-ACCESS-KEYS",
-                    "Root account access keys disabled"
-                ));
-            }
+                    "Set rootAccessKeysDisabled = true after removal."));
         }
 
         return rules;
@@ -283,7 +258,7 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
 
         // Credential rotation
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean credentialRotation = getBooleanSetting(ctx, "credentialRotationEnabled", false);
+            boolean credentialRotation = RuleSettings.accessorValue(ctx, "credentialRotationEnabled", false);
 
             ComplianceMatrix.ValidationResult result = ComplianceMatrix.validateControlMultiFramework(
                 ComplianceMatrix.SecurityControl.CREDENTIAL_ROTATION,
@@ -315,20 +290,15 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
             }
 
             // Unused credentials detection
-            boolean unusedCredentialsCheck = getBooleanSetting(ctx, "unusedCredentialsCheckEnabled", false);
-            if (!unusedCredentialsCheck) {
-                rules.add(ComplianceRule.fail(
-                    "UNUSED-CREDENTIALS",
-                    "Unused credentials should be identified and removed",
-                    "Enable AWS Config rules to detect unused IAM credentials. " +
-                    "Set unusedCredentialsCheckEnabled = true when monitoring is configured."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "UNUSED-CREDENTIALS",
-                    "Unused credentials monitoring enabled"
-                ));
-            }
+            boolean unusedCredentialsCheck = RuleSettings.accessorValue(ctx, "unusedCredentialsCheckEnabled", false);
+            rules.add(ComplianceRule.check(
+                unusedCredentialsCheck,
+                "UNUSED-CREDENTIALS",
+                "Unused credentials monitoring enabled",
+                "Unused credentials should be identified and removed",
+                null,
+                "Enable AWS Config rules to detect unused IAM credentials. " +
+                    "Set unusedCredentialsCheckEnabled = true when monitoring is configured."));
         }
 
         return rules;
@@ -373,19 +343,6 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. IAM-LEAST-PRIVILEGE and
      * ROOT-ACCESS-KEYS and UNUSED-CREDENTIALS are conditional checks with no direct
@@ -398,8 +355,8 @@ public class IamSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ACCESS_CONTROL", "AUTHENTICATION", "ROOT_ACCOUNT_PROTECTION", "CREDENTIAL_ROTATION"
+        return ClaimedControls.of(
+            SecurityControl.ACCESS_CONTROL, SecurityControl.AUTHENTICATION, SecurityControl.ROOT_ACCOUNT_PROTECTION, SecurityControl.CREDENTIAL_ROTATION
         );
     }
 }

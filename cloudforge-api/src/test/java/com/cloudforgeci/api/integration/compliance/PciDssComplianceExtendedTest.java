@@ -7,6 +7,7 @@ import com.cloudforgeci.api.observability.ComplianceFactory;
 import com.cloudforgeci.api.observability.FlowLogFactory;
 import com.cloudforgeci.api.observability.GuardDutyFactory;
 import com.cloudforgeci.api.storage.BackupFactory;
+import com.cloudforgeci.api.test.DeploymentSynth;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import software.amazon.awscdk.assertions.Match;
@@ -14,6 +15,10 @@ import software.amazon.awscdk.assertions.Template;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Extended comprehensive integration tests for PCI-DSS v4.0 compliance validation.
@@ -820,5 +825,49 @@ class PciDssComplianceExtendedTest extends IntegrationTestBase {
             "GroupDescription", Match.anyValue(),
             "VpcId", Match.anyValue()
         )));
+    }
+
+    // ========== Requirement 11.2: Vulnerability Scanning ==========
+    // The INSPECTOR rule is checked against the synthesized template, not only the inspectorEnabled setting.
+
+    private static long inspectorCalls(Template template, String action) {
+        return template.toJSON().toString().split("\"action\":\"" + action + "\"", -1).length - 1L;
+    }
+
+    @Test
+    void testReq11InspectorEnabledDeploysOnlyAReachabilityCheck() {
+        // With inspectorEnabled=true the template holds a batchGetAccountStatus call. It confirms
+        // the account is one Inspector recognizes, does not report whether scanning is on, and
+        // nothing enables Inspector. When CloudForge enables Inspector or reads the account's
+        // EC2 and ECR status, this test changes with it.
+        Template deployed = DeploymentSynth.synthesize(DeploymentSynth.baseline("pci-dss"));
+
+        assertTrue(inspectorCalls(deployed, "batchGetAccountStatus") > 0,
+            "inspectorEnabled=true deployed no Inspector resource");
+        assertEquals(0, inspectorCalls(deployed, "enable"),
+            "an Inspector enable call is now deployed; update this test and the rule's wording");
+    }
+
+    @Test
+    void testReq11InspectorOffDeploysNoInspectorResource() {
+        Map<String, Object> context = DeploymentSynth.baseline("pci-dss");
+        context.put("inspectorEnabled", false);
+        context.put("complianceMode", "advisory");
+
+        Template deployed = DeploymentSynth.synthesize(context);
+
+        assertEquals(0, inspectorCalls(deployed, "batchGetAccountStatus"));
+        assertEquals(0, inspectorCalls(deployed, "enable"));
+    }
+
+    @Test
+    void testReq11InspectorOffBlocksTheDeploymentWhenPciDssIsEnforced() {
+        // Req 11.2 requires vulnerability scanning. From a compliant baseline, turning Inspector
+        // off must block with that one rule and no other.
+        Map<String, Object> context = DeploymentSynth.baseline("pci-dss");
+        context.put("inspectorEnabled", false);
+
+        assertEquals(Set.of("Amazon Inspector required for pci-dss vulnerability scanning"),
+            DeploymentSynth.blockingRules(context));
     }
 }

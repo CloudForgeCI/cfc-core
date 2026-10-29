@@ -52,20 +52,12 @@ import java.util.Map;
     websiteUrl = "https://moodle.org",
     defaultImage = "moodlehq/moodle-php-apache:8.2"
 )
-public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
+public class MoodleApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "moodle";
     protected static final String DEFAULT_IMAGE = "moodlehq/moodle-php-apache:8.2";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/moodle";
-    protected static final String VOLUME_NAME = "moodleData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "pdo_mysql", "pdo_pgsql", "gd", "curl", "mbstring", "xml",
         "dom", "zip", "intl", "json", "opcache", "redis",
@@ -75,43 +67,8 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
     }
 
     @Override
@@ -119,17 +76,7 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
         return "/login/index.php";
     }
 
-    @Override
-    public int defaultHealthCheckGracePeriod() {
-        return 300;
-    }
-
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -181,11 +128,6 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
-    }
-
-    @Override
     public String s3MediaPlugin() {
         return null; // Moodle has built-in S3 filesystem support
     }
@@ -193,11 +135,6 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/moodledata";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -210,28 +147,8 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Moodle has native Redis support
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -242,28 +159,13 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return false; // Moodle doesn't have native multi-tenancy
-    }
-
-    @Override
     public String multisiteMode() {
         return "none";
     }
 
     @Override
-    public String cmsCategory() {
-        return "lms";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -294,16 +196,6 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== EC2 Configuration ==========
 
     @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
-
-    @Override
     public List<String> ec2LogPaths() {
         return List.of(
             "/var/log/httpd/access_log",
@@ -322,24 +214,9 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
             .withMemoryLimit(512);
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         // Create moodledata directory
         builder.addCommands(
@@ -368,9 +245,7 @@ public class MoodleApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'Moodle installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override

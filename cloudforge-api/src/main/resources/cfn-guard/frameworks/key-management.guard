@@ -119,12 +119,18 @@ rule key_management_alb_https when %elasticloadbalancingv2_listener !empty {
 
 # Secrets Manager rotation
 # CloudForge Mapping: KEY_MANAGEMENT control
-rule key_management_secrets_rotation when %secretsmanager_secret !empty {
+#
+# Rotation is a separate AWS::SecretsManager::RotationSchedule resource, not a property of the
+# secret. A secret whose value must stay fixed, such as an application's initial admin password,
+# carries the template metadata CloudForgeRotation: exempt and is skipped.
+let rotating_secret = Resources.*[ Type == 'AWS::SecretsManager::Secret'
+    Metadata.CloudForgeRotation !exists or Metadata.CloudForgeRotation != 'exempt' ]
+let rotation_schedule = Resources.*[ Type == 'AWS::SecretsManager::RotationSchedule' ]
 
-    %secretsmanager_secret.Properties.RotationSchedule exists <<[Key Management] Secrets Manager secrets must configure rotation>>
-    %secretsmanager_secret.Properties.RotationSchedule.RotationRules exists <<[Key Management] Must specify rotation rules>>
-    %secretsmanager_secret.Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays exists <<[Key Management] Secrets rotation must specify interval>>
-    %secretsmanager_secret.Properties.RotationSchedule.RotationRules.AutomaticallyAfterDays <= 90 <<[Key Management] Secrets must rotate within 90 days>>
+rule key_management_secrets_rotation when %rotating_secret !empty {
+
+    %rotation_schedule !empty <<[Key Management] Secrets Manager secrets must configure rotation>>
+    %rotation_schedule.Properties.RotationRules.AutomaticallyAfterDays <= 90 <<[Key Management] Secrets must rotate within 90 days>>
 }
 
 # ============================================================================

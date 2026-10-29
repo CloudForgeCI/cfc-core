@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * CDN and API security compliance validation rules.
@@ -121,36 +122,26 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
             }
 
             // Check minimum TLS version
-            boolean minTls12 = getBooleanSetting(ctx, "cloudfrontMinTls12", true);
-            if (!minTls12) {
-                rules.add(ComplianceRule.fail(
-                    "CLOUDFRONT-TLS-VERSION",
-                    "CloudFront must use TLS 1.2 minimum",
-                    "Configure CloudFront distribution with MinimumProtocolVersion TLSv1.2_2021. " +
-                    "Required for PCI-DSS and security best practices."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "CLOUDFRONT-TLS-VERSION",
-                    "CloudFront TLS 1.2+ configured"
-                ));
-            }
+            boolean minTls12 = RuleSettings.accessorValue(ctx, "cloudfrontMinTls12", true);
+            rules.add(ComplianceRule.check(
+                minTls12,
+                "CLOUDFRONT-TLS-VERSION",
+                "CloudFront TLS 1.2+ configured",
+                "CloudFront must use TLS 1.2 minimum",
+                null,
+                "Configure CloudFront distribution with MinimumProtocolVersion TLSv1.2_2021. " +
+                    "Required for PCI-DSS and security best practices."));
 
             // CloudFront access logging
-            boolean cloudfrontLogging = getBooleanSetting(ctx, "cloudfrontLogging", false);
-            if (!cloudfrontLogging) {
-                rules.add(ComplianceRule.fail(
-                    "CLOUDFRONT-LOGGING",
-                    "CloudFront access logging should be enabled",
-                    "Enable CloudFront access logging for audit trails and security analysis. " +
-                    "Set cloudfrontLogging = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "CLOUDFRONT-LOGGING",
-                    "CloudFront access logging enabled"
-                ));
-            }
+            boolean cloudfrontLogging = RuleSettings.accessorValue(ctx, "cloudfrontLogging", false);
+            rules.add(ComplianceRule.check(
+                cloudfrontLogging,
+                "CLOUDFRONT-LOGGING",
+                "CloudFront access logging enabled",
+                "CloudFront access logging should be enabled",
+                null,
+                "Enable CloudFront access logging for audit trails and security analysis. " +
+                    "Set cloudfrontLogging = true in deployment context."));
         }
 
         return rules;
@@ -179,35 +170,25 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
                 complianceMode
             );
 
-            if (result == ComplianceMatrix.ValidationResult.FAIL) {
-                rules.add(ComplianceRule.fail(
-                    "API-GATEWAY-LOGGING",
-                    "API Gateway access logging required for " + complianceFrameworks,
-                    "Enable API Gateway access logging and execution logging. " +
-                    "Required for PCI-DSS Req 10 and HIPAA audit controls."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "API-GATEWAY-LOGGING",
-                    "API Gateway logging configured"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(result == ComplianceMatrix.ValidationResult.FAIL),
+                "API-GATEWAY-LOGGING",
+                "API Gateway logging configured",
+                "API Gateway access logging required for " + complianceFrameworks,
+                null,
+                "Enable API Gateway access logging and execution logging. " +
+                    "Required for PCI-DSS Req 10 and HIPAA audit controls."));
 
             // API Gateway X-Ray tracing (advisory)
-            boolean apiXrayTracing = getBooleanSetting(ctx, "apiGatewayXrayTracing", false);
-            if (!apiXrayTracing) {
-                rules.add(ComplianceRule.fail(
-                    "API-GATEWAY-XRAY",
-                    "API Gateway X-Ray tracing recommended for production",
-                    "Enable X-Ray tracing for API Gateway for distributed tracing. " +
-                    "Set apiGatewayXrayTracing = true in deployment context."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "API-GATEWAY-XRAY",
-                    "API Gateway X-Ray tracing enabled"
-                ));
-            }
+            boolean apiXrayTracing = RuleSettings.accessorValue(ctx, "apiGatewayXrayTracing", false);
+            rules.add(ComplianceRule.check(
+                apiXrayTracing,
+                "API-GATEWAY-XRAY",
+                "API Gateway X-Ray tracing enabled",
+                "API Gateway X-Ray tracing recommended for production",
+                null,
+                "Enable X-Ray tracing for API Gateway for distributed tracing. " +
+                    "Set apiGatewayXrayTracing = true in deployment context."));
         }
 
         return rules;
@@ -286,19 +267,6 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. The CLOUDFRONT-HTTPS rule
      * passes a hardcoded {@code true} into {@code validateControlMultiFramework}, so it can never
@@ -309,8 +277,8 @@ public class CdnApiSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "CDN_SECURITY", "API_SECURITY", "WAF_PROTECTION"
+        return ClaimedControls.of(
+            SecurityControl.CDN_SECURITY, SecurityControl.API_SECURITY, SecurityControl.WAF_PROTECTION
         );
     }
 }

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * GDPR organizational and data protection validation rules.
@@ -128,61 +129,46 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Legal basis documented
-        boolean legalBasisDocumented = getBooleanSetting(ctx, "gdprLegalBasisDocumented", false);
+        boolean legalBasisDocumented = RuleSettings.contextValue(ctx, "gdprLegalBasisDocumented", false);
 
-        if (!legalBasisDocumented) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART6-LEGAL-BASIS",
-                "Document legal basis for processing personal data",
-                "Identify and document legal basis for each processing activity: " +
+        rules.add(ComplianceRule.check(
+            legalBasisDocumented,
+            "GDPR-ART6-LEGAL-BASIS",
+            "Legal basis for processing documented",
+            "Document legal basis for processing personal data",
+            null,
+            "Identify and document legal basis for each processing activity: " +
                 "consent, contract, legal obligation, vital interests, public task, or legitimate interests. " +
                 "GDPR Article 6(1). Required for lawful processing. " +
-                "Set gdprLegalBasisDocumented = true when documentation is complete."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART6-LEGAL-BASIS",
-                "Legal basis for processing documented"
-            ));
-        }
+                "Set gdprLegalBasisDocumented = true when documentation is complete."));
 
         // Consent mechanism (if consent is legal basis)
-        boolean consentMechanismImplemented = getBooleanSetting(ctx, "gdprConsentMechanismImplemented", false);
+        boolean consentMechanismImplemented = RuleSettings.contextValue(ctx, "gdprConsentMechanismImplemented", false);
 
-        if (!consentMechanismImplemented) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART7-CONSENT",
-                "Implement compliant consent mechanism if using consent as legal basis",
-                "If using consent: ensure freely given, specific, informed, unambiguous. " +
+        rules.add(ComplianceRule.check(
+            consentMechanismImplemented,
+            "GDPR-ART7-CONSENT",
+            "Consent mechanism implemented or not applicable",
+            "Implement compliant consent mechanism if using consent as legal basis",
+            null,
+            "If using consent: ensure freely given, specific, informed, unambiguous. " +
                 "Separate consent for different purposes. Easy withdrawal. " +
                 "GDPR Article 7. Document consent records. " +
-                "Set gdprConsentMechanismImplemented = true when implemented (or N/A if not using consent)."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART7-CONSENT",
-                "Consent mechanism implemented or not applicable"
-            ));
-        }
+                "Set gdprConsentMechanismImplemented = true when implemented (or N/A if not using consent)."));
 
         // Privacy notice
-        boolean privacyNoticeProvided = getBooleanSetting(ctx, "gdprPrivacyNoticeProvided", false);
+        boolean privacyNoticeProvided = RuleSettings.contextValue(ctx, "gdprPrivacyNoticeProvided", false);
 
-        if (!privacyNoticeProvided) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART13-PRIVACY-NOTICE",
-                "Provide privacy notice when collecting personal data",
-                "Privacy notice must include: controller identity, purposes, legal basis, " +
+        rules.add(ComplianceRule.check(
+            privacyNoticeProvided,
+            "GDPR-ART13-PRIVACY-NOTICE",
+            "Privacy notice provided to data subjects",
+            "Provide privacy notice when collecting personal data",
+            null,
+            "Privacy notice must include: controller identity, purposes, legal basis, " +
                 "recipients, retention periods, data subject rights, withdrawal of consent. " +
                 "GDPR Articles 13-14. Must be concise, transparent, accessible. " +
-                "Set gdprPrivacyNoticeProvided = true when privacy notice is published."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART13-PRIVACY-NOTICE",
-                "Privacy notice provided to data subjects"
-            ));
-        }
+                "Set gdprPrivacyNoticeProvided = true when privacy notice is published."));
 
         return rules;
     }
@@ -204,60 +190,45 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Data subject request procedures
-        boolean dataSubjectRequestProcedures = getBooleanSetting(ctx, "gdprDataSubjectRequestProcedures", false);
+        boolean dataSubjectRequestProcedures = RuleSettings.contextValue(ctx, "gdprDataSubjectRequestProcedures", false);
 
-        if (!dataSubjectRequestProcedures) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-DATA-SUBJECT-RIGHTS",
-                "Implement procedures for handling data subject rights requests",
-                "Document procedures for: access requests, rectification, erasure, " +
+        rules.add(ComplianceRule.check(
+            dataSubjectRequestProcedures,
+            "GDPR-DATA-SUBJECT-RIGHTS",
+            "Data subject rights request procedures implemented",
+            "Implement procedures for handling data subject rights requests",
+            null,
+            "Document procedures for: access requests, rectification, erasure, " +
                 "restriction, portability, objection. 1-month response timeline. " +
                 "GDPR Articles 15-22. Include identity verification. " +
-                "Set gdprDataSubjectRequestProcedures = true when procedures are documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-DATA-SUBJECT-RIGHTS",
-                "Data subject rights request procedures implemented"
-            ));
-        }
+                "Set gdprDataSubjectRequestProcedures = true when procedures are documented."));
 
         // Right to erasure technical capability
-        boolean rightToErasureCapability = getBooleanSetting(ctx, "gdprRightToErasureCapability", false);
+        boolean rightToErasureCapability = RuleSettings.contextValue(ctx, "gdprRightToErasureCapability", false);
 
-        if (!rightToErasureCapability) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART17-ERASURE",
-                "Implement technical capability for data erasure",
-                "Ensure systems can delete/anonymize personal data upon request. " +
+        rules.add(ComplianceRule.check(
+            rightToErasureCapability,
+            "GDPR-ART17-ERASURE",
+            "Right to erasure technical capability implemented",
+            "Implement technical capability for data erasure",
+            null,
+            "Ensure systems can delete/anonymize personal data upon request. " +
                 "GDPR Article 17. Consider backup retention, legal holds. " +
                 "Document erasure procedures. " +
-                "Set gdprRightToErasureCapability = true when erasure is technically feasible."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART17-ERASURE",
-                "Right to erasure technical capability implemented"
-            ));
-        }
+                "Set gdprRightToErasureCapability = true when erasure is technically feasible."));
 
         // Data portability capability
-        boolean dataPortabilityCapability = getBooleanSetting(ctx, "gdprDataPortabilityCapability", false);
+        boolean dataPortabilityCapability = RuleSettings.contextValue(ctx, "gdprDataPortabilityCapability", false);
 
-        if (!dataPortabilityCapability) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART20-PORTABILITY",
-                "Implement data portability capability (structured, machine-readable format)",
-                "Enable data export in structured, commonly used, machine-readable format (JSON, CSV). " +
+        rules.add(ComplianceRule.check(
+            dataPortabilityCapability,
+            "GDPR-ART20-PORTABILITY",
+            "Data portability capability implemented",
+            "Implement data portability capability (structured, machine-readable format)",
+            null,
+            "Enable data export in structured, commonly used, machine-readable format (JSON, CSV). " +
                 "GDPR Article 20. Applies when processing is based on consent or contract. " +
-                "Set gdprDataPortabilityCapability = true when export functionality exists."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART20-PORTABILITY",
-                "Data portability capability implemented"
-            ));
-        }
+                "Set gdprDataPortabilityCapability = true when export functionality exists."));
 
         return rules;
     }
@@ -276,7 +247,7 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // DPIA conducted
-        boolean dpiaCompleted = getBooleanSetting(ctx, "gdprDpiaCompleted", false);
+        boolean dpiaCompleted = RuleSettings.contextValue(ctx, "gdprDpiaCompleted", false);
 
         boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
         if (isProdOrStaging && !dpiaCompleted) {
@@ -296,23 +267,18 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         }
 
         // Privacy by Design
-        boolean privacyByDesignImplemented = getBooleanSetting(ctx, "gdprPrivacyByDesignImplemented", false);
+        boolean privacyByDesignImplemented = RuleSettings.contextValue(ctx, "gdprPrivacyByDesignImplemented", false);
 
-        if (!privacyByDesignImplemented) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART25-PRIVACY-BY-DESIGN",
-                "Implement data protection by design and by default",
-                "Implement technical and organizational measures ensuring: data minimization, " +
+        rules.add(ComplianceRule.check(
+            privacyByDesignImplemented,
+            "GDPR-ART25-PRIVACY-BY-DESIGN",
+            "Privacy by design and by default implemented",
+            "Implement data protection by design and by default",
+            null,
+            "Implement technical and organizational measures ensuring: data minimization, " +
                 "pseudonymization, encryption, confidentiality, integrity, availability. " +
                 "GDPR Article 25. Infrastructure encryption satisfies part of this. " +
-                "Set gdprPrivacyByDesignImplemented = true when measures are documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART25-PRIVACY-BY-DESIGN",
-                "Privacy by design and by default implemented"
-            ));
-        }
+                "Set gdprPrivacyByDesignImplemented = true when measures are documented."));
 
         return rules;
     }
@@ -335,41 +301,31 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         boolean isEuRegion = region != null && region.startsWith("eu-");
 
         // International transfer safeguards
-        boolean internationalTransferSafeguards = getBooleanSetting(ctx, "gdprInternationalTransferSafeguards", false);
+        boolean internationalTransferSafeguards = RuleSettings.contextValue(ctx, "gdprInternationalTransferSafeguards", false);
 
-        if (!isEuRegion && !internationalTransferSafeguards) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART46-INTERNATIONAL-TRANSFERS",
-                "Implement safeguards for international data transfers outside EU/EEA",
-                "If transferring personal data outside EU/EEA: use Standard Contractual Clauses (SCCs), " +
+        rules.add(ComplianceRule.check(
+            !(!isEuRegion && !internationalTransferSafeguards),
+            "GDPR-ART46-INTERNATIONAL-TRANSFERS",
+            "International transfer safeguards in place or using EU region",
+            "Implement safeguards for international data transfers outside EU/EEA",
+            null,
+            "If transferring personal data outside EU/EEA: use Standard Contractual Clauses (SCCs), " +
                 "Binding Corporate Rules (BCRs), or adequacy decision. " +
                 "GDPR Articles 44-46. AWS SCCs available through AWS Artifact. " +
-                "Set gdprInternationalTransferSafeguards = true when safeguards are in place."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART46-INTERNATIONAL-TRANSFERS",
-                "International transfer safeguards in place or using EU region"
-            ));
-        }
+                "Set gdprInternationalTransferSafeguards = true when safeguards are in place."));
 
         // Data localization
-        boolean dataLocalizationEnforced = getBooleanSetting(ctx, "gdprDataLocalizationEnforced", false);
+        boolean dataLocalizationEnforced = RuleSettings.contextValue(ctx, "gdprDataLocalizationEnforced", false);
 
-        if (!dataLocalizationEnforced) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-DATA-LOCALIZATION",
-                "Document data localization requirements and enforcement",
-                "Verify all personal data remains in approved regions (EU/EEA or adequate country). " +
+        rules.add(ComplianceRule.check(
+            dataLocalizationEnforced,
+            "GDPR-DATA-LOCALIZATION",
+            "Data localization enforced",
+            "Document data localization requirements and enforcement",
+            null,
+            "Verify all personal data remains in approved regions (EU/EEA or adequate country). " +
                 "Configure S3 bucket policies, RDS read replicas, backup regions accordingly. " +
-                "Set gdprDataLocalizationEnforced = true when localization is configured."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-DATA-LOCALIZATION",
-                "Data localization enforced"
-            ));
-        }
+                "Set gdprDataLocalizationEnforced = true when localization is configured."));
 
         return rules;
     }
@@ -388,56 +344,34 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Data retention policy
-        boolean dataRetentionPolicyDefined = getBooleanSetting(ctx, "gdprDataRetentionPolicyDefined", false);
+        boolean dataRetentionPolicyDefined = RuleSettings.contextValue(ctx, "gdprDataRetentionPolicyDefined", false);
 
-        if (!dataRetentionPolicyDefined) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART5-RETENTION",
-                "Define data retention policy and deletion schedules",
-                "Document retention periods for each category of personal data. " +
+        rules.add(ComplianceRule.check(
+            dataRetentionPolicyDefined,
+            "GDPR-ART5-RETENTION",
+            "Data retention policy defined",
+            "Define data retention policy and deletion schedules",
+            null,
+            "Document retention periods for each category of personal data. " +
                 "GDPR Article 5(1)(e): data kept no longer than necessary. " +
                 "Implement automated deletion after retention period expires. " +
-                "Set gdprDataRetentionPolicyDefined = true when policy is documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART5-RETENTION",
-                "Data retention policy defined"
-            ));
-        }
+                "Set gdprDataRetentionPolicyDefined = true when policy is documented."));
 
         // Records of processing activities (ROPA)
-        boolean recordsOfProcessingActivities = getBooleanSetting(ctx, "gdprRecordsOfProcessingActivities", false);
+        boolean recordsOfProcessingActivities = RuleSettings.contextValue(ctx, "gdprRecordsOfProcessingActivities", false);
 
-        if (!recordsOfProcessingActivities) {
-            rules.add(ComplianceRule.fail(
-                "GDPR-ART30-ROPA",
-                "Maintain records of processing activities (ROPA)",
-                "Document: purposes, categories of data subjects, categories of data, " +
+        rules.add(ComplianceRule.check(
+            recordsOfProcessingActivities,
+            "GDPR-ART30-ROPA",
+            "Records of processing activities (ROPA) maintained",
+            "Maintain records of processing activities (ROPA)",
+            null,
+            "Document: purposes, categories of data subjects, categories of data, " +
                 "recipients, transfers, retention periods, security measures. " +
                 "GDPR Article 30. Required for organizations >250 employees or high-risk processing. " +
-                "Set gdprRecordsOfProcessingActivities = true when ROPA is maintained."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "GDPR-ART30-ROPA",
-                "Records of processing activities (ROPA) maintained"
-            ));
-        }
+                "Set gdprRecordsOfProcessingActivities = true when ROPA is maintained."));
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -451,6 +385,6 @@ public class GdprOrganizationalRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of();
+        return ClaimedControls.of();
     }
 }

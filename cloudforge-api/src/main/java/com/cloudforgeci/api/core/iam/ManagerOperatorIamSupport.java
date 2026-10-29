@@ -1,10 +1,10 @@
 package com.cloudforgeci.api.core.iam;
 
 import com.cloudforge.core.enums.IAMProfile;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforge.core.manager.ManagerAwsCapabilityCatalog;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforgeci.api.deploy.aws.AwsDirectDeployer;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 import io.github.cdklabs.cdknag.NagSuppressions;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.PolicyStatement;
@@ -107,13 +107,11 @@ public final class ManagerOperatorIamSupport {
             NagSuppressions.addResourceSuppressions(
                 role,
                 List.of(
-                    NagPackSuppression.builder()
-                        .id("AwsSolutions-IAM5")
-                        .reason("CloudForge Manager operator APIs (CFN inventory/delete, ECS lifecycle, "
+                    NagSuppress.of("AwsSolutions-IAM5",
+                        "CloudForge Manager operator APIs (CFN inventory/delete, ECS lifecycle, "
                             + "RDS snapshot/restore) require account-scoped resources per "
                             + ManagerAwsCapabilityCatalog.CATALOG_VERSION
                             + ". Application-layer RBAC governs panel access.")
-                        .build()
                 ),
                 Boolean.TRUE);
         });
@@ -475,15 +473,13 @@ public final class ManagerOperatorIamSupport {
         NagSuppressions.addResourceSuppressions(
             role,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("CloudForge Manager direct-deploy actions (CreateStack/UpdateStack/PassRole) "
+                NagSuppress.of("AwsSolutions-IAM5",
+                    "CloudForge Manager direct-deploy actions (CreateStack/UpdateStack/PassRole) "
                         + "are scoped by aws:RequestTag/aws:ResourceTag/iam:ResourceTag conditions requiring "
                         + "the CloudForge-managed tag convention, not by resource ARN — CDK synthesizes "
                         + "resource names dynamically, so a wildcard resource with a tag condition is the "
                         + "narrowest expressible scope. Service Catalog provisioning carries no CFN/IAM "
                         + "permissions on this role at all.")
-                    .build()
             ),
             Boolean.TRUE);
     }

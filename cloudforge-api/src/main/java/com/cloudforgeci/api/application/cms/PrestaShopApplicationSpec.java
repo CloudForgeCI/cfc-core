@@ -52,20 +52,12 @@ import java.util.Map;
     websiteUrl = "https://www.prestashop.com",
     defaultImage = "prestashop/prestashop:8.1-apache"
 )
-public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
+public class PrestaShopApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "prestashop";
     protected static final String DEFAULT_IMAGE = "prestashop/prestashop:8.1-apache";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/prestashop";
-    protected static final String VOLUME_NAME = "prestashopData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.1";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "mysqli", "pdo_mysql", "gd", "curl", "mbstring", "xml",
         "dom", "zip", "intl", "json", "opcache", "redis",
@@ -75,48 +67,8 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
-    }
-
-    @Override
-    public String healthCheckPath() {
-        return "/";
     }
 
     @Override
@@ -125,11 +77,6 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -171,21 +118,6 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public int phpUploadMaxFilesize() {
-        return 64;
-    }
-
-    @Override
-    public int phpPostMaxSize() {
-        return 64;
-    }
-
-    @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
-    }
-
-    @Override
     public String s3MediaPlugin() {
         return "amazons3"; // PrestaShop Amazon S3 module
     }
@@ -193,11 +125,6 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/img";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -243,28 +170,8 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // PrestaShop has built-in Redis support
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -275,28 +182,13 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return true;
-    }
-
-    @Override
     public String multisiteMode() {
         return "domain"; // PrestaShop multi-shop uses separate domains
     }
 
     @Override
-    public String cmsCategory() {
-        return "ecommerce";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -327,16 +219,6 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== EC2 Configuration ==========
 
     @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
-
-    @Override
     public List<String> ec2LogPaths() {
         return List.of(
             "/var/log/httpd/access_log",
@@ -357,27 +239,12 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
         // Install Apache
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
         PhpUserDataBuilder.installComposer(builder);
 
         // Mount storage
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         // Set permissions
         builder.addCommands(
@@ -394,9 +261,7 @@ public class PrestaShopApplicationSpec implements CmsSpec, DatabaseSpec {
         );
 
         // Install CloudWatch agent
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override

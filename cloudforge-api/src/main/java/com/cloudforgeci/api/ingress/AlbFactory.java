@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.ingress;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
@@ -18,7 +19,6 @@ import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.s3.*;
 import software.constructs.Construct;
 import io.github.cdklabs.cdknag.NagSuppressions;
-import io.github.cdklabs.cdknag.NagPackSuppression;
 
 import java.util.List;
 import java.util.Map;
@@ -148,12 +148,10 @@ public class AlbFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             sg,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-EC23")
-                    .reason("ALB security group requires open ingress on ports 80/443 for public-facing " +
+                NagSuppress.of("AwsSolutions-EC23",
+                    "ALB security group requires open ingress on ports 80/443 for public-facing " +
                             "load balancer. This is the intended architecture for serving web applications " +
                             "to internet users. Backend instances are protected in private subnets.")
-                    .build()
             ),
             Boolean.TRUE
         );
@@ -261,12 +259,10 @@ public class AlbFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             alb,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-ELB2")
-                    .reason("ALB access logging is intentionally disabled for DEV/non-production " +
+                NagSuppress.of("AwsSolutions-ELB2",
+                    "ALB access logging is intentionally disabled for DEV/non-production " +
                             "environments to reduce S3 storage costs. Production deployments enable " +
                             "access logging for audit compliance and security monitoring.")
-                    .build()
             ),
             Boolean.TRUE
         );
@@ -375,44 +371,30 @@ public class AlbFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             newBucket,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-S1")
-                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
-                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-S3BucketReplicationEnabled")
-                    .reason("S3 replication is not required for single-region deployments. " +
-                           "ALB access logs are retained with versioning enabled for compliance.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-S3BucketLoggingEnabled")
-                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
-                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-S3DefaultEncryptionKMS")
-                    .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
-                           "supported for ALB access logs due to AWS service limitations.")
-                    .build(),
+                NagSuppress.of("AwsSolutions-S1",
+                    "ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging."),
+                NagSuppress.of("PCI.DSS.321-S3BucketReplicationEnabled",
+                    "S3 replication is not required for single-region deployments. " +
+                           "ALB access logs are retained with versioning enabled for compliance."),
+                NagSuppress.of("PCI.DSS.321-S3BucketLoggingEnabled",
+                    "ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging."),
+                NagSuppress.of("PCI.DSS.321-S3DefaultEncryptionKMS",
+                    "ALB access logging requires S3-managed encryption. KMS encryption is not " +
+                           "supported for ALB access logs due to AWS service limitations."),
                 // Same three findings, flagged again under HIPAA's own rule IDs when HIPAA is one
                 // of the active compliance frameworks -- same justification as the PCI-DSS
                 // suppressions above, since the underlying architecture doesn't change per framework.
-                NagPackSuppression.builder()
-                    .id("HIPAA.Security-S3BucketReplicationEnabled")
-                    .reason("S3 replication is not required for single-region deployments. " +
-                           "ALB access logs are retained with versioning enabled for compliance.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("HIPAA.Security-S3BucketLoggingEnabled")
-                    .reason("ALB access logs bucket receives logs from ALB. Server access logging " +
-                           "would create circular dependency. CloudTrail S3 data events provide audit logging.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("HIPAA.Security-S3DefaultEncryptionKMS")
-                    .reason("ALB access logging requires S3-managed encryption. KMS encryption is not " +
+                NagSuppress.of("HIPAA.Security-S3BucketReplicationEnabled",
+                    "S3 replication is not required for single-region deployments. " +
+                           "ALB access logs are retained with versioning enabled for compliance."),
+                NagSuppress.of("HIPAA.Security-S3BucketLoggingEnabled",
+                    "ALB access logs bucket receives logs from ALB. Server access logging " +
+                           "would create circular dependency. CloudTrail S3 data events provide audit logging."),
+                NagSuppress.of("HIPAA.Security-S3DefaultEncryptionKMS",
+                    "ALB access logging requires S3-managed encryption. KMS encryption is not " +
                            "supported for ALB access logs due to AWS service limitations.")
-                    .build()
             ),
             Boolean.TRUE
         );
@@ -446,17 +428,13 @@ public class AlbFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             ssmWriter.function,
             List.of(
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-IAMNoInlinePolicy")
-                    .reason("This Lambda's own execution policy is scoped to a single " +
+                NagSuppress.of("PCI.DSS.321-IAMNoInlinePolicy",
+                    "This Lambda's own execution policy is scoped to a single " +
                            "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
-                           "right shape for a permission this narrow.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-LambdaInsideVPC")
-                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "right shape for a permission this narrow."),
+                NagSuppress.of("PCI.DSS.321-LambdaInsideVPC",
+                    "This custom resource Lambda only makes an SSM API call and does not " +
                            "require VPC access.")
-                    .build()
             ),
             Boolean.TRUE
         );

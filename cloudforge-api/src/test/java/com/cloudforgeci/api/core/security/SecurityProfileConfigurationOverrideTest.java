@@ -126,7 +126,28 @@ class SecurityProfileConfigurationOverrideTest {
                 .isSnsKmsEncryptionEnabled());
             assertFalse(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("snsKmsEncryptionEnabled", false)))
                 .isSnsKmsEncryptionEnabled());
-            assertFalse(new ProductionSecurityProfileConfiguration(cfcUnset()).isSnsKmsEncryptionEnabled());
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcUnset()).isSnsKmsEncryptionEnabled(),
+                "PRODUCTION does not create an unencrypted topic unless the setting turns it off");
+        }
+
+        @Test
+        void cloudWatchLogsKmsEncryptionEnabledHonorsOverride() {
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("cloudWatchLogsKmsEncryptionEnabled", true)))
+                .isCloudWatchLogsKmsEncryptionEnabled());
+            assertFalse(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("cloudWatchLogsKmsEncryptionEnabled", false)))
+                .isCloudWatchLogsKmsEncryptionEnabled());
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcUnset()).isCloudWatchLogsKmsEncryptionEnabled(),
+                "PRODUCTION default: on");
+        }
+
+        @Test
+        void secretsKmsEncryptionEnabledHonorsOverride() {
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("secretsKmsEncryptionEnabled", true)))
+                .isSecretsKmsEncryptionEnabled());
+            assertFalse(new ProductionSecurityProfileConfiguration(cfcWith(Map.of("secretsKmsEncryptionEnabled", false)))
+                .isSecretsKmsEncryptionEnabled());
+            assertTrue(new ProductionSecurityProfileConfiguration(cfcUnset()).isSecretsKmsEncryptionEnabled(),
+                "PRODUCTION default: on");
         }
 
         @Test
@@ -215,6 +236,16 @@ class SecurityProfileConfigurationOverrideTest {
             assertFalse(new StagingSecurityProfileConfiguration(cfcWith(Map.of("snsKmsEncryptionEnabled", false)))
                 .isSnsKmsEncryptionEnabled());
             assertFalse(new StagingSecurityProfileConfiguration(cfcUnset()).isSnsKmsEncryptionEnabled());
+        }
+
+        @Test
+        void secretsKmsEncryptionEnabledHonorsOverride() {
+            assertTrue(new StagingSecurityProfileConfiguration(cfcWith(Map.of("secretsKmsEncryptionEnabled", true)))
+                .isSecretsKmsEncryptionEnabled());
+            assertFalse(new StagingSecurityProfileConfiguration(cfcWith(Map.of("secretsKmsEncryptionEnabled", false)))
+                .isSecretsKmsEncryptionEnabled());
+            assertTrue(new StagingSecurityProfileConfiguration(cfcUnset()).isSecretsKmsEncryptionEnabled(),
+                "STAGING default: on");
         }
 
         @Test

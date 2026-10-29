@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * FedRAMP Moderate compliance validation.
@@ -179,68 +180,42 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // AC-2: Account Management - IAM profile must be configured
-        if (ctx.iamProfile == null) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-2",
-                "Account management controls required (NIST AC-2)",
-                "iam-user-group-membership-check",
-                "Configure IAM profile for role-based access control."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-2",
-                "Account management controls configured (NIST AC-2)",
-                "iam-user-group-membership-check"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.iamProfile == null),
+            "FEDRAMP-AC-2",
+            "Account management controls configured (NIST AC-2)",
+            "Account management controls required (NIST AC-2)",
+            "iam-user-group-membership-check",
+            "Configure IAM profile for role-based access control."));
 
         // AC-3: Access Enforcement - Security groups must be configured
-        if (ctx.albSg.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-3",
-                "Access enforcement controls required (NIST AC-3)",
-                "Security groups must be configured to enforce access policies."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-3",
-                "Access enforcement controls configured (NIST AC-3)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.albSg.get().isEmpty(),
+            "FEDRAMP-AC-3",
+            "Access enforcement controls configured (NIST AC-3)",
+            "Access enforcement controls required (NIST AC-3)",
+            null,
+            "Security groups must be configured to enforce access policies."));
 
         // AC-4: Information Flow Enforcement - VPC Flow Logs required
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-4",
-                "Information flow enforcement requires VPC Flow Logs (NIST AC-4)",
-                "vpc-flow-logs-enabled",
-                "Enable VPC Flow Logs to monitor and control information flow."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-4",
-                "Information flow enforcement enabled via VPC Flow Logs (NIST AC-4)",
-                "vpc-flow-logs-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "FEDRAMP-AC-4",
+            "Information flow enforcement enabled via VPC Flow Logs (NIST AC-4)",
+            "Information flow enforcement requires VPC Flow Logs (NIST AC-4)",
+            "vpc-flow-logs-enabled",
+            "Enable VPC Flow Logs to monitor and control information flow."));
 
         // AC-6: Least Privilege - continuously validated by AWS Config's
         // iam-policy-no-statements-with-admin-access managed rule, provisioned by
         // ComplianceFactory only when AWS Config is enabled.
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-6",
-                "Least privilege requires continuous IAM policy monitoring via AWS Config (NIST AC-6)",
-                "iam-policy-no-statements-with-admin-access",
-                "Set awsConfigEnabled = true to provision the least-privilege Config rule."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-6",
-                "Least privilege enforced via IAM policies (NIST AC-6)",
-                "iam-policy-no-statements-with-admin-access"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-AC-6",
+            "Least privilege enforced via IAM policies (NIST AC-6)",
+            "Least privilege requires continuous IAM policy monitoring via AWS Config (NIST AC-6)",
+            "iam-policy-no-statements-with-admin-access",
+            "Set awsConfigEnabled = true to provision the least-privilege Config rule."));
 
         // AC-7: Unsuccessful Logon Attempts - Cognito lockout policy
         AuthMode authMode = ctx.cfc.authMode();
@@ -259,36 +234,22 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         }
 
         // AC-17: Remote Access - SSH must be restricted
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-17",
-                "Remote access must be through controlled access points (NIST AC-17)",
-                "restricted-ssh",
-                "Use private-with-nat network mode for controlled remote access."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-17",
-                "Remote access controlled via private network (NIST AC-17)",
-                "restricted-ssh"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC),
+            "FEDRAMP-AC-17",
+            "Remote access controlled via private network (NIST AC-17)",
+            "Remote access must be through controlled access points (NIST AC-17)",
+            "restricted-ssh",
+            "Use private-with-nat network mode for controlled remote access."));
 
         // AC-17(2): Remote Access - Encryption required
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AC-17(2)",
-                "Remote access must use encrypted channels (NIST AC-17(2))",
-                "alb-http-to-https-redirection-check",
-                "Configure TLS certificate for encrypted remote access."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AC-17(2)",
-                "Remote access encrypted via TLS (NIST AC-17(2))",
-                "alb-http-to-https-redirection-check"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "FEDRAMP-AC-17(2)",
+            "Remote access encrypted via TLS (NIST AC-17(2))",
+            "Remote access must use encrypted channels (NIST AC-17(2))",
+            "alb-http-to-https-redirection-check",
+            "Configure TLS certificate for encrypted remote access."));
 
         return rules;
     }
@@ -316,20 +277,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // AU-2: Event Logging - CloudTrail must be enabled
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-2",
-                "Event logging via CloudTrail required (NIST AU-2)",
-                "cloudtrail-enabled",
-                "Enable CloudTrail for comprehensive audit logging."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-2",
-                "Event logging enabled via CloudTrail (NIST AU-2)",
-                "cloudtrail-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "FEDRAMP-AU-2",
+            "Event logging enabled via CloudTrail (NIST AU-2)",
+            "Event logging via CloudTrail required (NIST AU-2)",
+            "cloudtrail-enabled",
+            "Enable CloudTrail for comprehensive audit logging."));
 
         // AU-3: Content of Audit Records - CloudTrail provides detailed records
         if (config.isCloudTrailEnabled()) {
@@ -341,86 +295,51 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         }
 
         // AU-6: Audit Review - Security Hub and GuardDuty for automated review
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-6",
-                "Automated audit review required via GuardDuty (NIST AU-6)",
-                "guardduty-enabled-centralized",
-                "Enable GuardDuty for automated audit log analysis."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-6",
-                "Automated audit review enabled via GuardDuty (NIST AU-6)",
-                "guardduty-enabled-centralized"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "FEDRAMP-AU-6",
+            "Automated audit review enabled via GuardDuty (NIST AU-6)",
+            "Automated audit review required via GuardDuty (NIST AU-6)",
+            "guardduty-enabled-centralized",
+            "Enable GuardDuty for automated audit log analysis."));
 
         // AU-9: Protection of Audit Information - S3 encryption for logs
-        if (!config.isS3EncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-9",
-                "Audit information must be protected via encryption (NIST AU-9)",
-                "s3-bucket-server-side-encryption-enabled",
-                "Enable S3 encryption for audit log protection."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-9",
-                "Audit information protected via S3 encryption (NIST AU-9)",
-                "s3-bucket-server-side-encryption-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3EncryptionEnabled(),
+            "FEDRAMP-AU-9",
+            "Audit information protected via S3 encryption (NIST AU-9)",
+            "Audit information must be protected via encryption (NIST AU-9)",
+            "s3-bucket-server-side-encryption-enabled",
+            "Enable S3 encryption for audit log protection."));
 
         // AU-11: Audit Record Retention - FedRAMP requires 3 years
         var retentionDays = config.getLogRetentionDays();
-        if (!isRetentionSufficient(retentionDays)) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-11",
-                "Audit record retention must be at least 3 years (NIST AU-11)",
-                "cloudwatch-log-group-encrypted",
-                "FedRAMP requires 3-year retention. Current: " + retentionDays.toString() + ". " +
-                "Configure log retention to at least THREE_YEARS."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-11",
-                "Audit record retention meets 3-year requirement (NIST AU-11)",
-                "cloudwatch-log-group-encrypted"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            isRetentionSufficient(retentionDays),
+            "FEDRAMP-AU-11",
+            "Audit record retention meets 3-year requirement (NIST AU-11)",
+            "Audit record retention must be at least 3 years (NIST AU-11)",
+            "cloudwatch-log-group-encrypted",
+            "FedRAMP requires 3-year retention. Current: " + retentionDays.toString() + ". " +
+                "Configure log retention to at least THREE_YEARS."));
 
         // AU-12: Audit Record Generation - Multi-source logging
-        if (config.isCloudTrailEnabled() && config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-12",
-                "Audit records generated from multiple sources (NIST AU-12)",
-                "multi-region-cloudtrail-enabled"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-12",
-                "Comprehensive audit record generation required (NIST AU-12)",
-                "multi-region-cloudtrail-enabled",
-                "Enable both CloudTrail and VPC Flow Logs for complete audit coverage."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled() && config.isFlowLogsEnabled(),
+            "FEDRAMP-AU-12",
+            "Audit records generated from multiple sources (NIST AU-12)",
+            "Comprehensive audit record generation required (NIST AU-12)",
+            "multi-region-cloudtrail-enabled",
+            "Enable both CloudTrail and VPC Flow Logs for complete audit coverage."));
 
         // ALB Access Logging
-        if (!config.isAlbAccessLoggingEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-12-ALB",
-                "ALB access logging required for web request auditing (NIST AU-12)",
-                "elb-logging-enabled",
-                "Enable ALB access logging for comprehensive request tracking."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-12-ALB",
-                "ALB access logging enabled (NIST AU-12)",
-                "elb-logging-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAlbAccessLoggingEnabled(),
+            "FEDRAMP-AU-12-ALB",
+            "ALB access logging enabled (NIST AU-12)",
+            "ALB access logging required for web request auditing (NIST AU-12)",
+            "elb-logging-enabled",
+            "Enable ALB access logging for comprehensive request tracking."));
 
         return rules;
     }
@@ -444,34 +363,22 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // CA-7: Continuous Monitoring - AWS Config must be enabled
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CA-7",
-                "Continuous monitoring required via AWS Config (NIST CA-7)",
-                "Enable AWS Config for continuous compliance monitoring."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CA-7",
-                "Continuous monitoring enabled via AWS Config (NIST CA-7)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-CA-7",
+            "Continuous monitoring enabled via AWS Config (NIST CA-7)",
+            "Continuous monitoring required via AWS Config (NIST CA-7)",
+            null,
+            "Enable AWS Config for continuous compliance monitoring."));
 
         // CA-7(4): Risk Monitoring - Security Hub
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CA-7(4)",
-                "Security risk monitoring required (NIST CA-7(4))",
-                "securityhub-enabled",
-                "Enable Security Hub for risk-based monitoring."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CA-7(4)",
-                "Security risk monitoring enabled (NIST CA-7(4))",
-                "securityhub-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "FEDRAMP-CA-7(4)",
+            "Security risk monitoring enabled (NIST CA-7(4))",
+            "Security risk monitoring required (NIST CA-7(4))",
+            "securityhub-enabled",
+            "Enable Security Hub for risk-based monitoring."));
 
         return rules;
     }
@@ -503,48 +410,31 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         ));
 
         // CM-3: Configuration Change Control - CloudTrail logs all changes
-        if (config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CM-3",
-                "Configuration changes tracked via CloudTrail (NIST CM-3)",
-                "cloudtrail-enabled"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CM-3",
-                "Configuration change tracking required (NIST CM-3)",
-                "cloudtrail-enabled",
-                "Enable CloudTrail to track all configuration changes."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "FEDRAMP-CM-3",
+            "Configuration changes tracked via CloudTrail (NIST CM-3)",
+            "Configuration change tracking required (NIST CM-3)",
+            "cloudtrail-enabled",
+            "Enable CloudTrail to track all configuration changes."));
 
         // CM-6: Configuration Settings - AWS Config rules
-        if (config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CM-6",
-                "Configuration settings monitored via AWS Config (NIST CM-6)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CM-6",
-                "Configuration compliance monitoring required (NIST CM-6)",
-                "Enable AWS Config for configuration settings validation."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-CM-6",
+            "Configuration settings monitored via AWS Config (NIST CM-6)",
+            "Configuration compliance monitoring required (NIST CM-6)",
+            null,
+            "Enable AWS Config for configuration settings validation."));
 
         // CM-8: System Component Inventory - AWS Config resource inventory
-        if (config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CM-8",
-                "System component inventory maintained via AWS Config (NIST CM-8)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CM-8",
-                "System component inventory required (NIST CM-8)",
-                "Enable AWS Config to maintain a resource inventory."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-CM-8",
+            "System component inventory maintained via AWS Config (NIST CM-8)",
+            "System component inventory required (NIST CM-8)",
+            null,
+            "Enable AWS Config to maintain a resource inventory."));
 
         return rules;
     }
@@ -586,20 +476,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         }
 
         // CP-9: System Backup - Automated backups must be enabled
-        if (!config.isAutomatedBackupEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-CP-9",
-                "Automated system backups required (NIST CP-9)",
-                "db-instance-backup-enabled",
-                "Enable automated backups for data protection."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-CP-9",
-                "Automated system backups enabled (NIST CP-9)",
-                "db-instance-backup-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAutomatedBackupEnabled(),
+            "FEDRAMP-CP-9",
+            "Automated system backups enabled (NIST CP-9)",
+            "Automated system backups required (NIST CP-9)",
+            "db-instance-backup-enabled",
+            "Enable automated backups for data protection."));
 
         // CP-10: System Recovery - Multi-AZ for high availability
         if (isProdOrStaging && !config.isMultiAzEnforced()) {
@@ -637,18 +520,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
 
         // IA-2: User Identification and Authentication
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-IA-2",
-                "User identification and authentication required (NIST IA-2)",
-                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc'."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-IA-2",
-                "User identification and authentication enabled (NIST IA-2)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "FEDRAMP-IA-2",
+            "User identification and authentication enabled (NIST IA-2)",
+            "User identification and authentication required (NIST IA-2)",
+            null,
+            "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc'."));
 
         // IA-2(1): Multi-Factor Authentication for privileged accounts
         if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
@@ -656,20 +534,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
             boolean hasValidSso = ctx.cfc.ssoInstanceArn() != null && !ctx.cfc.ssoInstanceArn().isEmpty();
 
-            if (!usingCognitoWithMfa && !hasValidSso) {
-                rules.add(ComplianceRule.fail(
-                    "FEDRAMP-IA-2(1)",
-                    "Multi-factor authentication required for privileged access (NIST IA-2(1))",
-                    "iam-user-mfa-enabled",
-                    "Enable Cognito MFA or configure AWS IAM Identity Center with MFA."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "FEDRAMP-IA-2(1)",
-                    "Multi-factor authentication configured (NIST IA-2(1))",
-                    "iam-user-mfa-enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(!usingCognitoWithMfa && !hasValidSso),
+                "FEDRAMP-IA-2(1)",
+                "Multi-factor authentication configured (NIST IA-2(1))",
+                "Multi-factor authentication required for privileged access (NIST IA-2(1))",
+                "iam-user-mfa-enabled",
+                "Enable Cognito MFA or configure AWS IAM Identity Center with MFA."));
         }
 
         // IA-5 / IA-5(1): Authenticator Management - FedRAMP requires minimum 12-character passwords
@@ -728,50 +599,31 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // IR-4: Incident Handling - GuardDuty for automated detection
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-IR-4",
-                "Incident handling capability required via GuardDuty (NIST IR-4)",
-                "guardduty-enabled-centralized",
-                "Enable GuardDuty for automated incident detection and handling."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-IR-4",
-                "Incident handling capability enabled via GuardDuty (NIST IR-4)",
-                "guardduty-enabled-centralized"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "FEDRAMP-IR-4",
+            "Incident handling capability enabled via GuardDuty (NIST IR-4)",
+            "Incident handling capability required via GuardDuty (NIST IR-4)",
+            "guardduty-enabled-centralized",
+            "Enable GuardDuty for automated incident detection and handling."));
 
         // IR-5: Incident Monitoring
-        if (config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-IR-5",
-                "Incident monitoring enabled via CloudWatch and GuardDuty (NIST IR-5)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-IR-5",
-                "Incident monitoring required (NIST IR-5)",
-                "Enable security monitoring for incident detection."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "FEDRAMP-IR-5",
+            "Incident monitoring enabled via CloudWatch and GuardDuty (NIST IR-5)",
+            "Incident monitoring required (NIST IR-5)",
+            null,
+            "Enable security monitoring for incident detection."));
 
         // IR-6: Incident Reporting - Security Hub aggregates findings
-        if (config.isSecurityMonitoringEnabled() && config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-IR-6",
-                "Incident reporting capability enabled via Security Hub (NIST IR-6)",
-                "securityhub-enabled"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-IR-6",
-                "Incident reporting capability required (NIST IR-6)",
-                "securityhub-enabled",
-                "Enable both security monitoring and GuardDuty to aggregate findings for incident reporting."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled() && config.isGuardDutyEnabled(),
+            "FEDRAMP-IR-6",
+            "Incident reporting capability enabled via Security Hub (NIST IR-6)",
+            "Incident reporting capability required (NIST IR-6)",
+            "securityhub-enabled",
+            "Enable both security monitoring and GuardDuty to aggregate findings for incident reporting."));
 
         return rules;
     }
@@ -795,65 +647,39 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // MP-4: Media Storage - Encryption at rest
-        if (!config.isEbsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-MP-4-EBS",
-                "Media storage encryption required for EBS (NIST MP-4)",
-                "encrypted-volumes",
-                "Enable EBS encryption for data at rest protection."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-MP-4-EBS",
-                "EBS encryption enabled for media storage (NIST MP-4)",
-                "encrypted-volumes"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEbsEncryptionEnabled(),
+            "FEDRAMP-MP-4-EBS",
+            "EBS encryption enabled for media storage (NIST MP-4)",
+            "Media storage encryption required for EBS (NIST MP-4)",
+            "encrypted-volumes",
+            "Enable EBS encryption for data at rest protection."));
 
-        if (!config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-MP-4-EFS",
-                "Media storage encryption required for EFS (NIST MP-4)",
-                "efs-encrypted-check",
-                "Enable EFS encryption at rest."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-MP-4-EFS",
-                "EFS encryption at rest enabled (NIST MP-4)",
-                "efs-encrypted-check"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionAtRestEnabled(),
+            "FEDRAMP-MP-4-EFS",
+            "EFS encryption at rest enabled (NIST MP-4)",
+            "Media storage encryption required for EFS (NIST MP-4)",
+            "efs-encrypted-check",
+            "Enable EFS encryption at rest."));
 
         // MP-5: Media Transport - Encryption in transit
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-MP-5-EFS",
-                "Media transport encryption required for EFS (NIST MP-5)",
-                "Enable EFS encryption in transit."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-MP-5-EFS",
-                "EFS encryption in transit enabled (NIST MP-5)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "FEDRAMP-MP-5-EFS",
+            "EFS encryption in transit enabled (NIST MP-5)",
+            "Media transport encryption required for EFS (NIST MP-5)",
+            null,
+            "Enable EFS encryption in transit."));
 
         // TLS for web traffic
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-MP-5-TLS",
-                "Media transport encryption required via TLS (NIST MP-5)",
-                "elb-tls-https-listeners-only",
-                "Configure TLS certificate for encrypted transport."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-MP-5-TLS",
-                "TLS encryption enabled for media transport (NIST MP-5)",
-                "elb-tls-https-listeners-only"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "FEDRAMP-MP-5-TLS",
+            "TLS encryption enabled for media transport (NIST MP-5)",
+            "Media transport encryption required via TLS (NIST MP-5)",
+            "elb-tls-https-listeners-only",
+            "Configure TLS certificate for encrypted transport."));
 
         return rules;
     }
@@ -876,32 +702,22 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // RA-5: Vulnerability Monitoring - AWS Config rules
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-RA-5",
-                "Vulnerability monitoring required via AWS Config (NIST RA-5)",
-                "Enable AWS Config for continuous vulnerability assessment."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-RA-5",
-                "Vulnerability monitoring enabled via AWS Config (NIST RA-5)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-RA-5",
+            "Vulnerability monitoring enabled via AWS Config (NIST RA-5)",
+            "Vulnerability monitoring required via AWS Config (NIST RA-5)",
+            null,
+            "Enable AWS Config for continuous vulnerability assessment."));
 
         // RA-5(2): Update Frequency - Continuous monitoring
-        if (config.isAwsConfigEnabled() && config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-RA-5(2)",
-                "Continuous vulnerability monitoring enabled (NIST RA-5(2))"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-RA-5(2)",
-                "Continuous vulnerability monitoring required (NIST RA-5(2))",
-                "Enable both AWS Config and GuardDuty for continuous scanning."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled() && config.isGuardDutyEnabled(),
+            "FEDRAMP-RA-5(2)",
+            "Continuous vulnerability monitoring enabled (NIST RA-5(2))",
+            "Continuous vulnerability monitoring required (NIST RA-5(2))",
+            null,
+            "Enable both AWS Config and GuardDuty for continuous scanning."));
 
         return rules;
     }
@@ -928,116 +744,67 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // SC-7: Boundary Protection - VPC and security groups
-        if (ctx.vpc.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-7",
-                "Boundary protection required via VPC (NIST SC-7)",
-                "ec2-instances-in-vpc",
-                "Deploy resources within a VPC for boundary protection."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-7",
-                "Boundary protection enabled via VPC (NIST SC-7)",
-                "ec2-instances-in-vpc"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.vpc.get().isEmpty(),
+            "FEDRAMP-SC-7",
+            "Boundary protection enabled via VPC (NIST SC-7)",
+            "Boundary protection required via VPC (NIST SC-7)",
+            "ec2-instances-in-vpc",
+            "Deploy resources within a VPC for boundary protection."));
 
         // SC-7: WAF for public-facing applications
-        if (!config.isWafEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-7-WAF",
-                "Web Application Firewall recommended for boundary protection (NIST SC-7)",
-                "wafv2-logging-enabled",
-                "Enable WAF for protection against web-based attacks."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-7-WAF",
-                "Web Application Firewall enabled (NIST SC-7)",
-                "wafv2-logging-enabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isWafEnabled(),
+            "FEDRAMP-SC-7-WAF",
+            "Web Application Firewall enabled (NIST SC-7)",
+            "Web Application Firewall recommended for boundary protection (NIST SC-7)",
+            "wafv2-logging-enabled",
+            "Enable WAF for protection against web-based attacks."));
 
         // SC-7(5): Deny by Default
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-7(5)",
-                "Default deny network policy required (NIST SC-7(5))",
-                "vpc-default-security-group-closed",
-                "Use private-with-nat network mode for default deny."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-7(5)",
-                "Default deny network policy configured (NIST SC-7(5))",
-                "vpc-default-security-group-closed"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC),
+            "FEDRAMP-SC-7(5)",
+            "Default deny network policy configured (NIST SC-7(5))",
+            "Default deny network policy required (NIST SC-7(5))",
+            "vpc-default-security-group-closed",
+            "Use private-with-nat network mode for default deny."));
 
         // SC-8: Transmission Confidentiality - TLS required
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-8",
-                "Transmission confidentiality required via TLS (NIST SC-8)",
-                "elb-tls-https-listeners-only",
-                "Configure TLS certificate for encrypted communications."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-8",
-                "Transmission confidentiality enabled via TLS (NIST SC-8)",
-                "elb-tls-https-listeners-only"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "FEDRAMP-SC-8",
+            "Transmission confidentiality enabled via TLS (NIST SC-8)",
+            "Transmission confidentiality required via TLS (NIST SC-8)",
+            "elb-tls-https-listeners-only",
+            "Configure TLS certificate for encrypted communications."));
 
         // SC-12: Cryptographic Key Management - customer-managed KMS key with rotation
-        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-12",
-                "Cryptographic key establishment and management requires a customer-managed KMS key (NIST SC-12)",
-                "kms-cmk-not-scheduled-for-deletion",
-                "Set cloudWatchLogsKmsEncryptionEnabled = true to provision a rotating customer-managed key."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-12",
-                "Cryptographic key management via AWS KMS (NIST SC-12)",
-                "kms-cmk-not-scheduled-for-deletion"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudWatchLogsKmsEncryptionEnabled(),
+            "FEDRAMP-SC-12",
+            "Cryptographic key management via AWS KMS (NIST SC-12)",
+            "Cryptographic key establishment and management requires a customer-managed KMS key (NIST SC-12)",
+            "kms-cmk-not-scheduled-for-deletion",
+            "Set cloudWatchLogsKmsEncryptionEnabled = true to provision a rotating customer-managed key."));
 
         // SC-13: Cryptographic Protection - AES-256 encryption applied to data at rest
-        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-13",
-                "Cryptographic protection requires AES-256 encryption of data at rest (NIST SC-13)",
-                "encrypted-volumes",
-                "Enable encryption at rest for all storage."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-13",
-                "FIPS 140-2 validated cryptographic protection (NIST SC-13)",
-                "encrypted-volumes"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()),
+            "FEDRAMP-SC-13",
+            "FIPS 140-2 validated cryptographic protection (NIST SC-13)",
+            "Cryptographic protection requires AES-256 encryption of data at rest (NIST SC-13)",
+            "encrypted-volumes",
+            "Enable encryption at rest for all storage."));
 
         // SC-28: Protection of Information at Rest
-        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-28",
-                "Protection of information at rest required (NIST SC-28)",
-                "encrypted-volumes",
-                "Enable encryption at rest for all storage."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-28",
-                "Information at rest protected via encryption (NIST SC-28)",
-                "encrypted-volumes"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()),
+            "FEDRAMP-SC-28",
+            "Information at rest protected via encryption (NIST SC-28)",
+            "Protection of information at rest required (NIST SC-28)",
+            "encrypted-volumes",
+            "Enable encryption at rest for all storage."));
 
         return rules;
     }
@@ -1063,48 +830,31 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
         );
 
         // SI-2: Flaw Remediation - AWS Config with remediation
-        if (config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SI-2",
-                "Flaw remediation capability enabled via AWS Config (NIST SI-2)"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SI-2",
-                "Flaw remediation capability required (NIST SI-2)",
-                "Enable AWS Config for automated flaw detection and remediation."
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "FEDRAMP-SI-2",
+            "Flaw remediation capability enabled via AWS Config (NIST SI-2)",
+            "Flaw remediation capability required (NIST SI-2)",
+            null,
+            "Enable AWS Config for automated flaw detection and remediation."));
 
         // SI-3: Malicious Code Protection - GuardDuty
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SI-3",
-                "Malicious code protection required via GuardDuty (NIST SI-3)",
-                "guardduty-enabled-centralized",
-                "Enable GuardDuty for malware and threat detection."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SI-3",
-                "Malicious code protection enabled via GuardDuty (NIST SI-3)",
-                "guardduty-enabled-centralized"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "FEDRAMP-SI-3",
+            "Malicious code protection enabled via GuardDuty (NIST SI-3)",
+            "Malicious code protection required via GuardDuty (NIST SI-3)",
+            "guardduty-enabled-centralized",
+            "Enable GuardDuty for malware and threat detection."));
 
         // SI-4: System Monitoring - CloudWatch, GuardDuty, VPC Flow Logs
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SI-4",
-                "System monitoring required (NIST SI-4)",
-                "Enable security monitoring via CloudWatch and GuardDuty."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SI-4",
-                "System monitoring enabled via CloudWatch and GuardDuty (NIST SI-4)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "FEDRAMP-SI-4",
+            "System monitoring enabled via CloudWatch and GuardDuty (NIST SI-4)",
+            "System monitoring required (NIST SI-4)",
+            null,
+            "Enable security monitoring via CloudWatch and GuardDuty."));
 
         // SI-4(4): Inbound and Outbound Traffic Monitoring
         if (config.isFlowLogsEnabled()) {
@@ -1139,92 +889,62 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
 
         // AU-9: CloudWatch Logs may contain sensitive federal data in application log output --
         // distinct from the general S3-encryption check already covering the other half of AU-9.
-        if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-9-LogEncryption",
-                "CloudWatch log groups must be encrypted with a customer-managed KMS key (NIST AU-9)",
-                "Enable cloudWatchLogsKmsEncryptionEnabled."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-9-LogEncryption",
-                "CloudWatch log groups encrypted with a customer-managed KMS key (NIST AU-9)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudWatchLogsKmsEncryptionEnabled(),
+            "FEDRAMP-AU-9-LogEncryption",
+            "CloudWatch log groups encrypted with a customer-managed KMS key (NIST AU-9)",
+            "CloudWatch log groups must be encrypted with a customer-managed KMS key (NIST AU-9)",
+            null,
+            "Enable cloudWatchLogsKmsEncryptionEnabled."));
 
         // AU-9: audit trail immutability.
-        if (!config.isS3ObjectLockEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-AU-9-AuditLogImmutability",
-                "S3 Object Lock required so audit logs cannot be altered or deleted (NIST AU-9)",
-                "Enable S3 Object Lock on the audit-log buckets."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-AU-9-AuditLogImmutability",
-                "S3 Object Lock enabled on audit-log buckets (NIST AU-9)"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3ObjectLockEnabled(),
+            "FEDRAMP-AU-9-AuditLogImmutability",
+            "S3 Object Lock enabled on audit-log buckets (NIST AU-9)",
+            "S3 Object Lock required so audit logs cannot be altered or deleted (NIST AU-9)",
+            null,
+            "Enable S3 Object Lock on the audit-log buckets."));
 
         // SC-8(1): HTTPS-only mode -- distinct from the SC-8 cert-presence check above, which
         // confirms TLS is available but not that the HTTP listener is actually disabled.
-        if (!config.isHttpsStrictEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "FEDRAMP-SC-8(1)-HTTPSStrict",
-                "HTTP listener must be disabled when SSL is enabled (NIST SC-8(1))",
-                "Set httpsStrictEnabled = true to disable the port-80 listener."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "FEDRAMP-SC-8(1)-HTTPSStrict",
-                "HTTP listener disabled, HTTPS-only mode enforced (NIST SC-8(1))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isHttpsStrictEnabled(),
+            "FEDRAMP-SC-8(1)-HTTPSStrict",
+            "HTTP listener disabled, HTTPS-only mode enforced (NIST SC-8(1))",
+            "HTTP listener must be disabled when SSL is enabled (NIST SC-8(1))",
+            null,
+            "Set httpsStrictEnabled = true to disable the port-80 listener."));
 
         // AC-3: EC2 instance metadata is a documented credential-theft vector; Fargate has no
         // instance metadata service to protect.
         if (runtime == RuntimeType.EC2) {
-            if (!config.isImdsv2Required()) {
-                rules.add(ComplianceRule.fail(
-                    "FEDRAMP-AC-3-IMDSv2",
-                    "EC2 instances must require IMDSv2 (NIST AC-3)",
-                    "Set imdsv2Required=true."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "FEDRAMP-AC-3-IMDSv2",
-                    "EC2 instances require IMDSv2 tokens (NIST AC-3)"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isImdsv2Required(),
+                "FEDRAMP-AC-3-IMDSv2",
+                "EC2 instances require IMDSv2 tokens (NIST AC-3)",
+                "EC2 instances must require IMDSv2 (NIST AC-3)",
+                null,
+                "Set imdsv2Required=true."));
         }
 
         // CP-10: database-specific availability and protection -- the existing CP-10 check only
         // covers compute Multi-AZ, not RDS specifically.
         if (databaseProvisioned) {
-            if (!config.isRdsDatabaseMultiAzEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "FEDRAMP-CP-10-DatabaseMultiAZ",
-                    "RDS Multi-AZ required for database availability (NIST CP-10)",
-                    "Enable Multi-AZ on the RDS instance."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "FEDRAMP-CP-10-DatabaseMultiAZ",
-                    "RDS Multi-AZ enabled for database availability (NIST CP-10)"
-                ));
-            }
-            if (!config.isRdsDeletionProtectionEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "FEDRAMP-CP-9-DatabaseDeletionProtection",
-                    "RDS deletion protection required to prevent accidental data loss (NIST CP-9)",
-                    "Enable RDS deletion protection."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "FEDRAMP-CP-9-DatabaseDeletionProtection",
-                    "RDS deletion protection enabled (NIST CP-9)"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isRdsDatabaseMultiAzEnabled(),
+                "FEDRAMP-CP-10-DatabaseMultiAZ",
+                "RDS Multi-AZ enabled for database availability (NIST CP-10)",
+                "RDS Multi-AZ required for database availability (NIST CP-10)",
+                null,
+                "Enable Multi-AZ on the RDS instance."));
+            rules.add(ComplianceRule.check(
+                config.isRdsDeletionProtectionEnabled(),
+                "FEDRAMP-CP-9-DatabaseDeletionProtection",
+                "RDS deletion protection enabled (NIST CP-9)",
+                "RDS deletion protection required to prevent accidental data loss (NIST CP-9)",
+                null,
+                "Enable RDS deletion protection."));
         }
 
         return rules;
@@ -1243,13 +963,13 @@ public class FedRampRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ACCESS_CONTROL", "NETWORK_FLOW_LOGS", "AUTHENTICATION", "NETWORK_SEGMENTATION",
-            "ENCRYPTION_IN_TRANSIT", "AUDIT_LOGGING", "THREAT_DETECTION", "ENCRYPTION_AT_REST",
-            "LOG_RETENTION", "VULNERABILITY_MANAGEMENT", "SECURITY_MONITORING", "CHANGE_MANAGEMENT",
-            "BACKUP_RECOVERY", "HIGH_AVAILABILITY", "WAF_PROTECTION",
-            "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK", "HTTPS_STRICT", "EC2_IMDSV2",
-            "DATABASE_MULTI_AZ", "DELETION_PROTECTION"
+        return ClaimedControls.of(
+            SecurityControl.ACCESS_CONTROL, SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.AUTHENTICATION, SecurityControl.NETWORK_SEGMENTATION,
+            SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.AUDIT_LOGGING, SecurityControl.THREAT_DETECTION, SecurityControl.ENCRYPTION_AT_REST,
+            SecurityControl.LOG_RETENTION, SecurityControl.VULNERABILITY_MANAGEMENT, SecurityControl.SECURITY_MONITORING, SecurityControl.CHANGE_MANAGEMENT,
+            SecurityControl.BACKUP_RECOVERY, SecurityControl.HIGH_AVAILABILITY, SecurityControl.WAF_PROTECTION,
+            SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION, SecurityControl.S3_OBJECT_LOCK, SecurityControl.HTTPS_STRICT, SecurityControl.EC2_IMDSV2,
+            SecurityControl.DATABASE_MULTI_AZ, SecurityControl.DELETION_PROTECTION
         );
     }
 

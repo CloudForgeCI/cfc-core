@@ -52,20 +52,12 @@ import java.util.Map;
     websiteUrl = "https://www.joomla.org",
     defaultImage = "joomla:5-php8.2-apache"
 )
-public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
+public class JoomlaApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "joomla";
     protected static final String DEFAULT_IMAGE = "joomla:5-php8.2-apache";
-    protected static final int APPLICATION_PORT = 80;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/joomla";
-    protected static final String VOLUME_NAME = "joomlaData";
-    protected static final String CONTAINER_USER = "33:33";
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "mysqli", "pdo_mysql", "pdo_pgsql", "gd", "curl", "mbstring",
         "xml", "dom", "zip", "intl", "json", "opcache", "redis",
@@ -75,43 +67,8 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     // ========== ApplicationSpec Implementation ==========
 
     @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
     public String defaultContainerImage() {
         return DEFAULT_IMAGE;
-    }
-
-    @Override
-    public int applicationPort() {
-        return APPLICATION_PORT;
-    }
-
-    @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
-    public String containerUser() {
-        return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
     }
 
     @Override
@@ -125,11 +82,6 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -161,28 +113,8 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public int phpMemoryLimit() {
-        return 256;
-    }
-
-    @Override
     public int phpMaxExecutionTime() {
         return 300;
-    }
-
-    @Override
-    public int phpUploadMaxFilesize() {
-        return 64;
-    }
-
-    @Override
-    public int phpPostMaxSize() {
-        return 64;
-    }
-
-    @Override
-    public boolean supportsS3MediaStorage() {
-        return true;
     }
 
     @Override
@@ -193,11 +125,6 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public String mediaUploadPath() {
         return "/var/www/html/images";
-    }
-
-    @Override
-    public boolean supportsCdnIntegration() {
-        return true;
     }
 
     @Override
@@ -241,28 +168,8 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // Joomla has built-in cache handlers
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -273,28 +180,13 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return false; // Joomla doesn't have native multisite
-    }
-
-    @Override
     public String multisiteMode() {
         return "none";
     }
 
     @Override
-    public String cmsCategory() {
-        return "cms";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache"; // Joomla traditionally uses Apache with .htaccess
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -317,22 +209,7 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
             .withDatabaseName("joomla");
     }
 
-    @Override
-    public int backupRetentionDays() {
-        return 7;
-    }
-
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -354,25 +231,10 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
         // Install Apache instead of NGINX for Joomla
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
         // Mount storage
-        String[] userParts = containerUser().split(":");
-        if (context.hasEfs()) {
-            builder.mountEfs(
-                context.efsId().orElseThrow(),
-                context.accessPointId().orElseThrow(),
-                ec2DataPath(),
-                userParts[0], userParts[1]
-            );
-        } else {
-            builder.mountEbs(ebsDeviceName(), ec2DataPath(), userParts[0], userParts[1]);
-        }
+        mountStorage(builder, context);
 
         // Download Joomla
         builder.addCommands(
@@ -395,9 +257,7 @@ public class JoomlaApplicationSpec implements CmsSpec, DatabaseSpec {
         );
 
         // Install CloudWatch agent
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override

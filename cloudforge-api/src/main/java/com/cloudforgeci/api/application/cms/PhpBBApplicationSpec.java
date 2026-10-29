@@ -51,21 +51,15 @@ import java.util.Map;
     websiteUrl = "https://www.phpbb.com",
     defaultImage = "php:8.2-apache"
 )
-public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
+public class PhpBBApplicationSpec extends AbstractCmsApplicationSpec implements DatabaseSpec {
 
     // ========== Constants ==========
 
-    protected static final String APPLICATION_ID = "phpbb";
     protected static final String DEFAULT_IMAGE = "php:8.2-apache";
     protected static final int APPLICATION_PORT = 8080;
-    protected static final String CONTAINER_DATA_PATH = "/var/www/html";
-    protected static final String EFS_DATA_PATH = "/phpbb";
-    protected static final String VOLUME_NAME = "phpbbData";
     // null = container runs as root; Apache manages user switching internally
     protected static final String CONTAINER_USER = null;
-    protected static final String EFS_PERMISSIONS = "755";
 
-    protected static final String PHP_VERSION = "8.2";
     protected static final List<String> PHP_EXTENSIONS = List.of(
         "mysqli", "pdo_mysql", "pdo_pgsql", "pdo_sqlite", "gd", "curl",
         "mbstring", "xml", "dom", "zip", "json", "opcache",
@@ -73,11 +67,6 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     );
 
     // ========== ApplicationSpec Implementation ==========
-
-    @Override
-    public String applicationId() {
-        return APPLICATION_ID;
-    }
 
     @Override
     public String defaultContainerImage() {
@@ -90,28 +79,8 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public String containerDataPath() {
-        return CONTAINER_DATA_PATH;
-    }
-
-    @Override
-    public String efsDataPath() {
-        return EFS_DATA_PATH;
-    }
-
-    @Override
-    public String volumeName() {
-        return VOLUME_NAME;
-    }
-
-    @Override
     public String containerUser() {
         return CONTAINER_USER;
-    }
-
-    @Override
-    public String efsPermissions() {
-        return EFS_PERMISSIONS;
     }
 
     @Override
@@ -126,11 +95,6 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     // ========== CmsSpec Implementation ==========
-
-    @Override
-    public String phpVersion() {
-        return PHP_VERSION;
-    }
 
     @Override
     public List<String> requiredPhpExtensions() {
@@ -197,11 +161,6 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsCdnIntegration() {
-        return true;
-    }
-
-    @Override
     public List<String> cdnStaticPaths() {
         return List.of(
             "/styles/*",
@@ -211,28 +170,8 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsObjectCache() {
-        return true;
-    }
-
-    @Override
-    public String preferredCacheBackend() {
-        return "redis";
-    }
-
-    @Override
     public String objectCachePlugin() {
         return null; // phpBB has built-in cache drivers
-    }
-
-    @Override
-    public boolean hasScheduledTasks() {
-        return true;
-    }
-
-    @Override
-    public boolean useSystemCron() {
-        return true;
     }
 
     @Override
@@ -243,28 +182,13 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     }
 
     @Override
-    public boolean supportsMultisite() {
-        return false;
-    }
-
-    @Override
     public String multisiteMode() {
         return "none";
     }
 
     @Override
-    public String cmsCategory() {
-        return "forum";
-    }
-
-    @Override
     public String preferredWebServer() {
         return "apache";
-    }
-
-    @Override
-    public String documentRoot() {
-        return CONTAINER_DATA_PATH;
     }
 
     @Override
@@ -288,22 +212,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             .withDatabaseName("phpbb");
     }
 
-    @Override
-    public int backupRetentionDays() {
-        return 7;
-    }
-
     // ========== EC2 Configuration ==========
-
-    @Override
-    public String ebsDeviceName() {
-        return "/dev/xvdh";
-    }
-
-    @Override
-    public String ec2DataPath() {
-        return "/var/www/html";
-    }
 
     @Override
     public List<String> ec2LogPaths() {
@@ -323,12 +232,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
         PhpRuntimeConfig phpConfig = PhpRuntimeConfig.defaults().withVersion("8.2");
         PhpUserDataBuilder.installPhp(builder, phpConfig);
 
-        builder.addCommands(
-            "# Install Apache",
-            "dnf install -y httpd mod_ssl",
-            "systemctl enable httpd",
-            "echo 'Apache installed' >> /var/log/userdata.log"
-        );
+        installApache(builder);
 
         String cu = containerUser();
         String[] userParts = (cu != null) ? cu.split(":") : new String[]{"0", "0"};
@@ -366,9 +270,7 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
             "echo 'phpBB installation complete' >> /var/log/userdata.log"
         );
 
-        String logGroupName = String.format("/cloudforge/%s/%s",
-            context.stackName(), applicationId());
-        builder.installCloudWatchAgent(logGroupName, ec2LogPaths());
+        installLogAgent(builder, context);
     }
 
     @Override
@@ -504,11 +406,6 @@ public class PhpBBApplicationSpec implements CmsSpec, DatabaseSpec {
     @Override
     public OidcIntegration getOidcIntegration() {
         return new PhpBBOidcIntegration();
-    }
-
-    @Override
-    public List<String> getSupportedAuthModes() {
-        return List.of("alb-oidc", "none");
     }
 
     // ========== Path-Based Authentication ==========

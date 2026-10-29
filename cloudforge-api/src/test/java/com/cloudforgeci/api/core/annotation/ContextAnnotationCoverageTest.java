@@ -192,11 +192,11 @@ class ContextAnnotationCoverageTest {
         for (String setting : configSettings()) {
             // A setting is read under its own name or under any DeploymentContext accessor that
             // forwards it (macieAutomatedDiscoveryEnabled() reads macieAutomatedDiscovery), as an
-            // annotation key (plain or fully qualified), or as a raw context key.
+            // annotation key (plain or fully qualified), as a method reference, or as a raw context key.
             Set<String> names = new TreeSet<>(aliases.getOrDefault(setting, Set.of()));
             names.add(setting);
             boolean read = names.stream().anyMatch(name -> Pattern.compile(
-                "DeploymentContext\\(\"" + name + "\"\\)|\\." + name + "\\b|\\bget"
+                "DeploymentContext\\(\"" + name + "\"\\)|(?:\\.|::)" + name + "\\b|\\bget"
                     + capitalize(name) + "\\(|\"" + name + "\"").matcher(sources).find());
             if (!read) {
                 unread.add(setting);

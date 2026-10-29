@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Compute security compliance validation rules.
@@ -137,20 +138,15 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
 
         // Termination protection for production
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean terminationProtection = getBooleanSetting(ctx, "terminationProtection", false);
+            boolean terminationProtection = RuleSettings.accessorValue(ctx, "terminationProtection", false);
 
-            if (!terminationProtection) {
-                rules.add(ComplianceRule.fail(
-                    "EC2-TERMINATION-PROTECTION",
-                    "EC2 termination protection recommended for production",
-                    "Enable termination protection to prevent accidental instance termination."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "EC2-TERMINATION-PROTECTION",
-                    "EC2 termination protection enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                terminationProtection,
+                "EC2-TERMINATION-PROTECTION",
+                "EC2 termination protection enabled",
+                "EC2 termination protection recommended for production",
+                null,
+                "Enable termination protection to prevent accidental instance termination."));
         }
 
         return rules;
@@ -175,52 +171,37 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
 
         // EKS secrets encryption
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean eksSecretsEncryption = getBooleanSetting(ctx, "eksSecretsEncryption", false);
+            boolean eksSecretsEncryption = RuleSettings.accessorValue(ctx, "eksSecretsEncryption", false);
 
-            if (!eksSecretsEncryption) {
-                rules.add(ComplianceRule.fail(
-                    "EKS-SECRETS-ENCRYPTION",
-                    "EKS Kubernetes secrets must be encrypted with KMS",
-                    "Enable EKS secrets encryption using a KMS key."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "EKS-SECRETS-ENCRYPTION",
-                    "EKS secrets encryption enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                eksSecretsEncryption,
+                "EKS-SECRETS-ENCRYPTION",
+                "EKS secrets encryption enabled",
+                "EKS Kubernetes secrets must be encrypted with KMS",
+                null,
+                "Enable EKS secrets encryption using a KMS key."));
 
             // EKS private endpoint
-            boolean eksPrivateEndpoint = getBooleanSetting(ctx, "eksPrivateEndpoint", false);
+            boolean eksPrivateEndpoint = RuleSettings.accessorValue(ctx, "eksPrivateEndpoint", false);
 
-            if (!eksPrivateEndpoint) {
-                rules.add(ComplianceRule.fail(
-                    "EKS-PRIVATE-ENDPOINT",
-                    "EKS cluster should use private endpoint",
-                    "Configure EKS cluster with private endpoint access only."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "EKS-PRIVATE-ENDPOINT",
-                    "EKS private endpoint enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                eksPrivateEndpoint,
+                "EKS-PRIVATE-ENDPOINT",
+                "EKS private endpoint enabled",
+                "EKS cluster should use private endpoint",
+                null,
+                "Configure EKS cluster with private endpoint access only."));
 
             // EKS control plane logging
-            boolean eksLogging = getBooleanSetting(ctx, "eksControlPlaneLogging", false);
+            boolean eksLogging = RuleSettings.accessorValue(ctx, "eksControlPlaneLogging", false);
 
-            if (!eksLogging) {
-                rules.add(ComplianceRule.fail(
-                    "EKS-CONTROL-PLANE-LOGGING",
-                    "EKS control plane logging should be enabled",
-                    "Enable EKS control plane logging for audit and security monitoring."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "EKS-CONTROL-PLANE-LOGGING",
-                    "EKS control plane logging enabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                eksLogging,
+                "EKS-CONTROL-PLANE-LOGGING",
+                "EKS control plane logging enabled",
+                "EKS control plane logging should be enabled",
+                null,
+                "Enable EKS control plane logging for audit and security monitoring."));
         }
 
         return rules;
@@ -239,20 +220,15 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
 
         // IMDSv2 enforcement
         if (ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING) {
-            boolean imdsv2Required = getBooleanSetting(ctx, "imdsv2Required", true);
+            boolean imdsv2Required = RuleSettings.accessorValue(ctx, "imdsv2Required", true);
 
-            if (!imdsv2Required) {
-                rules.add(ComplianceRule.fail(
-                    "IMDSV2-REQUIRED",
-                    "IMDSv2 should be required for EC2 instances",
-                    "Require IMDSv2 (HttpTokens=required) to prevent SSRF attacks."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "IMDSV2-REQUIRED",
-                    "IMDSv2 requirement configured"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                imdsv2Required,
+                "IMDSV2-REQUIRED",
+                "IMDSv2 requirement configured",
+                "IMDSv2 should be required for EC2 instances",
+                null,
+                "Require IMDSv2 (HttpTokens=required) to prevent SSRF attacks."));
         }
 
         return rules;
@@ -267,19 +243,6 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Get boolean setting from context with default value.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            var method = ctx.cfc.getClass().getMethod(key);
-            Boolean value = (Boolean) method.invoke(ctx.cfc);
-            return value != null ? value : defaultValue;
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}. IMDSv2 enforcement is checked
      * once but satisfies both {@code EC2_IMDSV2} and {@code INSTANCE_METADATA_SECURITY}, which the
@@ -288,8 +251,8 @@ public class ComputeSecurityRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ENCRYPTION_AT_REST", "CONTAINER_SECURITY", "EC2_IMDSV2", "INSTANCE_METADATA_SECURITY"
+        return ClaimedControls.of(
+            SecurityControl.ENCRYPTION_AT_REST, SecurityControl.CONTAINER_SECURITY, SecurityControl.EC2_IMDSV2, SecurityControl.INSTANCE_METADATA_SECURITY
         );
     }
 }

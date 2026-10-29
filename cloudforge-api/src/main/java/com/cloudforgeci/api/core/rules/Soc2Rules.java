@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * SOC 2 (Service Organization Control 2) Trust Services Criteria compliance validation.
@@ -125,40 +126,32 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         );
 
         // CC6.1: Access controls must be implemented
-        if (ctx.iamProfile == null) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.1-IAM",
-                "IAM access controls required",
-                "IAMPasswordPolicyRule",
-                "Implement role-based access control (RBAC) to restrict access to system components."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.1-IAM", "IAM access controls enabled", "IAMPasswordPolicyRule"));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.iamProfile == null),
+            "SOC2-CC6.1-IAM",
+            "IAM access controls enabled",
+            "IAM access controls required",
+            "IAMPasswordPolicyRule",
+            "Implement role-based access control (RBAC) to restrict access to system components."));
 
         // CC6.2: Authentication required
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.2-Auth",
-                "User authentication required for customer-facing systems",
-                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to authenticate users."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.2-Auth", "User authentication enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "SOC2-CC6.2-Auth",
+            "User authentication enabled",
+            "User authentication required for customer-facing systems",
+            null,
+            "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to authenticate users."));
 
         // CC6.1: Encryption for data protection
-        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.1-Encryption",
-                "Encryption at rest required to protect confidential data",
-                "EbsEncryptionRule",
-                "Enable encryption for all storage volumes."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.1-Encryption", "Encryption at rest enabled", "EbsEncryptionRule"));
-        }
+        rules.add(ComplianceRule.check(
+            !(!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()),
+            "SOC2-CC6.1-Encryption",
+            "Encryption at rest enabled",
+            "Encryption at rest required to protect confidential data",
+            "EbsEncryptionRule",
+            "Enable encryption for all storage volumes."));
 
         return rules;
     }
@@ -175,25 +168,21 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         );
 
         // CC6.6: Network segmentation
-        if (ctx.vpc.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.6-VPC",
-                "Network segmentation required",
-                "Implement VPC with proper subnet isolation."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.6-VPC", "VPC network segmentation enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.vpc.get().isEmpty(),
+            "SOC2-CC6.6-VPC",
+            "VPC network segmentation enabled",
+            "Network segmentation required",
+            null,
+            "Implement VPC with proper subnet isolation."));
 
-        if (ctx.albSg.get().isEmpty() || ctx.efsSg.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.6-SG",
-                "Security groups required for network access control",
-                "Configure security groups to restrict traffic between components."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.6-SG", "Security groups configured"));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.albSg.get().isEmpty() || ctx.efsSg.get().isEmpty()),
+            "SOC2-CC6.6-SG",
+            "Security groups configured",
+            "Security groups required for network access control",
+            null,
+            "Configure security groups to restrict traffic between components."));
 
         // CC6.7: SSL/TLS must be enabled for encrypted data transmission
         if (!ctx.cfc.enableSsl()) {
@@ -222,26 +211,22 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
             }
         }
 
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.7-EFS",
-                "Encryption in transit required for internal data transfer",
-                "Enable EFS in-transit encryption."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.7-EFS", "EFS in-transit encryption enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "SOC2-CC6.7-EFS",
+            "EFS in-transit encryption enabled",
+            "Encryption in transit required for internal data transfer",
+            null,
+            "Enable EFS in-transit encryption."));
 
         // CC6.6: WAF for web application protection (recommended)
-        if (!config.isWafEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC6.6-WAF",
-                "Web Application Firewall recommended for production systems",
-                "Enable WAF to protect against common web attacks."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC6.6-WAF", "WAF protection enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isWafEnabled(),
+            "SOC2-CC6.6-WAF",
+            "WAF protection enabled",
+            "Web Application Firewall recommended for production systems",
+            null,
+            "Enable WAF to protect against common web attacks."));
 
         return rules;
     }
@@ -279,37 +264,30 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // CC7.2: Log collection for monitoring
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-CloudTrail",
-                "Audit logging required for system monitoring",
-                "CloudTrailEnabledRule",
-                "Enable CloudTrail to record all API activity."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC7.2-CloudTrail", "CloudTrail audit logging enabled", "CloudTrailEnabledRule"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "SOC2-CC7.2-CloudTrail",
+            "CloudTrail audit logging enabled",
+            "Audit logging required for system monitoring",
+            "CloudTrailEnabledRule",
+            "Enable CloudTrail to record all API activity."));
 
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-FlowLogs",
-                "Network monitoring required",
-                "Enable VPC Flow Logs to monitor network traffic."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC7.2-FlowLogs", "VPC Flow Logs enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "SOC2-CC7.2-FlowLogs",
+            "VPC Flow Logs enabled",
+            "Network monitoring required",
+            null,
+            "Enable VPC Flow Logs to monitor network traffic."));
 
         // CC7.2: Configuration compliance monitoring
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC7.2-Config",
-                "Configuration compliance monitoring recommended",
-                "Enable AWS Config to detect configuration drift and non-compliant resources."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC7.2-Config", "AWS Config compliance monitoring enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "SOC2-CC7.2-Config",
+            "AWS Config compliance monitoring enabled",
+            "Configuration compliance monitoring recommended",
+            null,
+            "Enable AWS Config to detect configuration drift and non-compliant resources."));
 
         // CC7.2: Log retention for audit trail
         // SOC2 requires adequate log retention for security monitoring and incident investigation
@@ -372,27 +350,22 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         );
 
         // CC8.1: Change tracking through CloudTrail
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC8.1-CloudTrail",
-                "CloudTrail required for change tracking and audit",
-                "CloudTrailEnabledRule",
-                "Enable CloudTrail to record all infrastructure changes."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC8.1-CloudTrail", "CloudTrail change tracking enabled", "CloudTrailEnabledRule"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "SOC2-CC8.1-CloudTrail",
+            "CloudTrail change tracking enabled",
+            "CloudTrail required for change tracking and audit",
+            "CloudTrailEnabledRule",
+            "Enable CloudTrail to record all infrastructure changes."));
 
         // CC8.1: Configuration change detection
-        if (!config.isAwsConfigEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-CC8.1-Config",
-                "AWS Config recommended for change detection",
-                "Enable AWS Config to track configuration changes and maintain compliance."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-CC8.1-Config", "AWS Config change detection enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAwsConfigEnabled(),
+            "SOC2-CC8.1-Config",
+            "AWS Config change detection enabled",
+            "AWS Config recommended for change detection",
+            null,
+            "Enable AWS Config to track configuration changes and maintain compliance."));
 
         // CC8.1: Infrastructure as Code provides change control
         rules.add(ComplianceRule.pass("SOC2-CC8.1-IaC", "Infrastructure as Code (CDK) provides version-controlled change management"));
@@ -534,42 +507,36 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         }
 
         // A1.2: High availability configuration
-        if (!config.isMultiAzEnforced()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-A1.2-MultiAZ",
-                "Multi-AZ deployment required for high availability in production",
-                "Deploy across multiple availability zones."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-A1.2-MultiAZ", "Multi-AZ high availability enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isMultiAzEnforced(),
+            "SOC2-A1.2-MultiAZ",
+            "Multi-AZ high availability enabled",
+            "Multi-AZ deployment required for high availability in production",
+            null,
+            "Deploy across multiple availability zones."));
 
         // A1.2: Auto-scaling for availability, for applications that can run more than one instance
         Integer maxInstances = ctx.maxInstanceCapacity.get().orElse(ctx.cfc.maxInstanceCapacity());
         boolean specSupportsScaling = ctx.applicationSpec.get()
             .map(com.cloudforge.core.interfaces.ApplicationSpec::supportsAutoScaling).orElse(true);
         if (autoScalingApplies(specSupportsScaling, maxInstances)) {
-            if (!config.isAutoScalingEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "SOC2-A1.2-AutoScaling",
-                    "Auto-scaling recommended for handling demand and maintaining availability",
-                    "Enable auto-scaling to handle traffic spikes."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass("SOC2-A1.2-AutoScaling", "Auto-scaling enabled"));
-            }
+            rules.add(ComplianceRule.check(
+                config.isAutoScalingEnabled(),
+                "SOC2-A1.2-AutoScaling",
+                "Auto-scaling enabled",
+                "Auto-scaling recommended for handling demand and maintaining availability",
+                null,
+                "Enable auto-scaling to handle traffic spikes."));
         }
 
         // A1.3: Backup and recovery
-        if (!config.isAutomatedBackupEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-A1.3-Backup",
-                "Automated backups required for disaster recovery",
-                "Enable automated backups to ensure data can be recovered."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-A1.3-Backup", "Automated backups enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAutomatedBackupEnabled(),
+            "SOC2-A1.3-Backup",
+            "Automated backups enabled",
+            "Automated backups required for disaster recovery",
+            null,
+            "Enable automated backups to ensure data can be recovered."));
 
         // Cross-region copy is a recommendation, so it never fails: it reports a pass only when a
         // destination vault is configured and backups are actually copied there.
@@ -598,48 +565,38 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
         );
 
         // C1.1: Encryption for confidential data
-        if (!config.isEbsEncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-C1.1-EBS",
-                "EBS encryption required for confidential data at rest",
-                "EbsEncryptionRule",
-                "Enable EBS encryption."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-C1.1-EBS", "EBS encryption enabled", "EbsEncryptionRule"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEbsEncryptionEnabled(),
+            "SOC2-C1.1-EBS",
+            "EBS encryption enabled",
+            "EBS encryption required for confidential data at rest",
+            "EbsEncryptionRule",
+            "Enable EBS encryption."));
 
-        if (!config.isEfsEncryptionAtRestEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-C1.1-EFS",
-                "EFS encryption required for confidential file storage",
-                "Enable EFS encryption at rest."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-C1.1-EFS", "EFS encryption enabled"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionAtRestEnabled(),
+            "SOC2-C1.1-EFS",
+            "EFS encryption enabled",
+            "EFS encryption required for confidential file storage",
+            null,
+            "Enable EFS encryption at rest."));
 
-        if (!config.isS3EncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-C1.1-S3",
-                "S3 encryption required for confidential data in object storage",
-                "S3BucketEncryptionRule",
-                "Enable S3 encryption."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-C1.1-S3", "S3 encryption enabled", "S3BucketEncryptionRule"));
-        }
+        rules.add(ComplianceRule.check(
+            config.isS3EncryptionEnabled(),
+            "SOC2-C1.1-S3",
+            "S3 encryption enabled",
+            "S3 encryption required for confidential data in object storage",
+            "S3BucketEncryptionRule",
+            "Enable S3 encryption."));
 
         // C1.2: Access restrictions for confidential data
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
-            rules.add(ComplianceRule.fail(
-                "SOC2-C1.2-Network",
-                "Private network mode required for confidential data",
-                "Use 'private-with-nat' to restrict access to confidential systems."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass("SOC2-C1.2-Network", "Private network mode configured"));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC),
+            "SOC2-C1.2-Network",
+            "Private network mode configured",
+            "Private network mode required for confidential data",
+            null,
+            "Use 'private-with-nat' to restrict access to confidential systems."));
 
         return rules;
     }
@@ -656,14 +613,14 @@ public class Soc2Rules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "ACCESS_CONTROL", "AUTHENTICATION", "ENCRYPTION_AT_REST", "NETWORK_SEGMENTATION",
-            "ENCRYPTION_IN_TRANSIT", "HTTPS_STRICT", "WAF_PROTECTION", "SECURITY_MONITORING",
-            "THREAT_DETECTION", "AUDIT_LOGGING", "NETWORK_FLOW_LOGS", "VULNERABILITY_MANAGEMENT",
-            "CHANGE_MANAGEMENT", "HIGH_AVAILABILITY", "BACKUP_RECOVERY",
-            "EC2_IMDSV2", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "CLOUDTRAIL_INSIGHTS",
-            "ROUTE53_QUERY_LOGGING", "S3_OBJECT_LOCK", "DATABASE_MULTI_AZ", "DELETION_PROTECTION",
-            "LOG_RETENTION", "AUDIT_MANAGER"
+        return ClaimedControls.of(
+            SecurityControl.ACCESS_CONTROL, SecurityControl.AUTHENTICATION, SecurityControl.ENCRYPTION_AT_REST, SecurityControl.NETWORK_SEGMENTATION,
+            SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.HTTPS_STRICT, SecurityControl.WAF_PROTECTION, SecurityControl.SECURITY_MONITORING,
+            SecurityControl.THREAT_DETECTION, SecurityControl.AUDIT_LOGGING, SecurityControl.NETWORK_FLOW_LOGS, SecurityControl.VULNERABILITY_MANAGEMENT,
+            SecurityControl.CHANGE_MANAGEMENT, SecurityControl.HIGH_AVAILABILITY, SecurityControl.BACKUP_RECOVERY,
+            SecurityControl.EC2_IMDSV2, SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION, SecurityControl.CLOUDTRAIL_INSIGHTS,
+            SecurityControl.ROUTE53_QUERY_LOGGING, SecurityControl.S3_OBJECT_LOCK, SecurityControl.DATABASE_MULTI_AZ, SecurityControl.DELETION_PROTECTION,
+            SecurityControl.LOG_RETENTION, SecurityControl.AUDIT_MANAGER
         );
     }
 

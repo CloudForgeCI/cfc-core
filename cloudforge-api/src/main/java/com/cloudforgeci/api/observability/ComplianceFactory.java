@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.observability;
 
 import com.cloudforgeci.api.core.annotation.BaseFactory;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
@@ -25,6 +26,7 @@ import software.amazon.awscdk.services.iam.Role;
 import software.amazon.awscdk.services.iam.ServicePrincipal;
 import software.amazon.awscdk.services.iam.ManagedPolicy;
 import software.amazon.awscdk.services.iam.AnyPrincipal;
+import software.amazon.awscdk.services.iam.PolicyDocument;
 import software.amazon.awscdk.services.iam.PolicyStatement;
 import software.amazon.awscdk.services.iam.Effect;
 import software.amazon.awscdk.services.ssm.CfnDocument;
@@ -265,7 +267,7 @@ public class ComplianceFactory extends BaseFactory {
                 LOG.info("  Config Recorder referenced by name 'cloudforge-config-recorder'");
                 LOG.info("  Rules will be created without CloudFormation dependencies");
                 createConfigRulesWithoutRecorder();
-                createAllFrameworkConfigRulesWithoutRecorder();
+                createAllFrameworkConfigRules(null);
             }
         } else {
             LOG.info("AWS Config rules and remediation disabled for profile: " + security);
@@ -484,13 +486,12 @@ public class ComplianceFactory extends BaseFactory {
 
         LOG.info("CloudTrail bucket ARN will be tracked in SSM Parameter Store for reuse");
 
-        // Enable KMS encryption for CloudTrail when:
-        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
-        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
+        // Enable KMS encryption for CloudTrail when the security profile resolves
+        // cloudWatchLogsKmsEncryptionEnabled to true: on in PRODUCTION, required by a framework
+        // in ENFORCE mode, or set explicitly.
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
-                || config.isCloudWatchLogsKmsEncryptionEnabled();
+        boolean useKms = config.isCloudWatchLogsKmsEncryptionEnabled();
 
         // Create KMS-encrypted CloudWatch Log Group for CloudTrail (PCI-DSS Req 3.4)
         Key cloudTrailLogsKmsKey = null;
@@ -759,14 +760,24 @@ public class ComplianceFactory extends BaseFactory {
      * Rules must depend on both the recorder AND the starter resource.
      *
      * @param rule The Config Rule to add dependencies to
-     * @param recorder The Configuration Recorder
+     * @param recorder The Configuration Recorder, or null when it exists outside this stack
      * @param starterResource The Custom Resource that starts the recorder
      */
     private void addConfigRuleDependencies(CfnConfigRule rule, CfnConfigurationRecorder recorder, CustomResource starterResource) {
+        if (recorder == null) {
+            return;
+        }
         rule.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
         rule.getNode().addDependency(recorder);
         if (starterResource != null) {
             rule.getNode().addDependency(starterResource);
+        }
+    }
+
+    /** Makes a rule depend on the Configuration Recorder; a null recorder exists outside this stack. */
+    private void dependOnRecorder(CfnConfigRule rule, CfnConfigurationRecorder recorder) {
+        if (recorder != null) {
+            rule.getNode().addDependency(recorder);
         }
     }
 
@@ -1643,33 +1654,26 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("  This ensures CloudTrail can always write audit logs for compliance");
     }
 
+    /** Names and settings that distinguish one RDS instance remediation from another. */
+    private record RdsRemediation(String id, String label, String policyName, String documentName,
+                                  String documentDescription, String stepName, String stepDescription,
+                                  String attribute, boolean applyImmediately, String mode, String impact) {}
+
     /**
-     * Creates automatic remediation for RDS deletion protection compliance.
-     * Enables deletion protection on non-compliant RDS instances.
-     *
-     * <p><b>Safety:</b> This is a SAFE remediation - it only enables protection, never disables it.</p>
-     * <p><b>Impact:</b> Protected databases cannot be accidentally deleted (requires manual disable first).</p>
-     *
-     * @param rdsDeletionProtectionRule The Config rule to remediate
+     * Creates an SSM Automation document that sets one boolean attribute on an RDS instance, the role
+     * it runs as, and an automatic remediation that runs it for each non-compliant instance.
      */
-    private void createRdsDeletionProtectionRemediation(CfnConfigRule rdsDeletionProtectionRule) {
+    private void createRdsInstanceRemediation(CfnConfigRule rule, RdsRemediation spec) {
+        LOG.info("Creating " + spec.label() + " automatic remediation");
 
-        if (!Boolean.TRUE.equals(enableRdsDeletionProtectionRemediation)) {
-            LOG.info("RDS deletion protection remediation disabled (enableRdsDeletionProtectionRemediation = false)");
-            return;
-        }
-
-        LOG.info("Creating RDS deletion protection automatic remediation");
-
-        // Create IAM role for SSM Automation with RDS permissions
-        Role ssmAutomationRole = Role.Builder.create(this, "RdsDeletionProtectionRemediationRole")
+        Role ssmAutomationRole = Role.Builder.create(this, spec.id() + "RemediationRole")
                 .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .description("Role for automated RDS deletion protection remediation")
+                .description("Role for automated " + spec.label() + " remediation")
                 .managedPolicies(List.of(
                     ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
                 ))
                 .inlinePolicies(Map.of(
-                    "RdsDeletionProtectionPolicy", software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                    spec.policyName(), PolicyDocument.Builder.create()
                         .statements(List.of(
                             PolicyStatement.Builder.create()
                                 .effect(Effect.ALLOW)
@@ -1684,15 +1688,13 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
-        // Create custom SSM document for RDS deletion protection
-        CfnDocument rdsDeletionProtectionDocument = CfnDocument.Builder.create(
-                this, "RdsDeletionProtectionDocument")
-                .name(this.stackName + "-enable-rds-deletion-protection")
+        CfnDocument document = CfnDocument.Builder.create(this, spec.id() + "Document")
+                .name(this.stackName + "-" + spec.documentName())
                 .documentType("Automation")
                 .documentFormat("JSON")
                 .content(Map.of(
                     "schemaVersion", "0.3",
-                    "description", "Enable deletion protection on RDS instances",
+                    "description", spec.documentDescription(),
                     "assumeRole", "{{ AutomationAssumeRole }}",
                     "parameters", Map.of(
                         "AutomationAssumeRole", Map.of(
@@ -1706,35 +1708,33 @@ public class ComplianceFactory extends BaseFactory {
                     ),
                     "mainSteps", List.of(
                         Map.of(
-                            "name", "EnableDeletionProtection",
+                            "name", spec.stepName(),
                             "action", "aws:executeAwsApi",
                             "inputs", Map.of(
                                 "Service", "rds",
                                 "Api", "ModifyDBInstance",
                                 "DBInstanceIdentifier", "{{ ResourceId }}",
-                                "DeletionProtection", true,
-                                "ApplyImmediately", true
+                                spec.attribute(), true,
+                                "ApplyImmediately", spec.applyImmediately()
                             ),
-                            "description", "Enable deletion protection on RDS instance"
+                            "description", spec.stepDescription()
                         )
                     )
                 ))
                 .build();
 
-        // Create remediation configuration
         CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "RdsDeletionProtectionRemediation")
-                .configRuleName(rdsDeletionProtectionRule.getRef())
+                this, spec.id() + "Remediation")
+                .configRuleName(rule.getRef())
                 .targetType("SSM_DOCUMENT")
-                .targetId(rdsDeletionProtectionDocument.getRef())
+                .targetId(document.getRef())
                 .targetVersion("1")
-                .automatic(true)  // Enable automatic remediation
+                .automatic(true)
                 .maximumAutomaticAttempts(3)
                 .retryAttemptSeconds(120)
                 .resourceType("AWS::RDS::DBInstance")
                 .build();
 
-        // Configure remediation parameters
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of(
                 "StaticValue", Map.of("Values", List.of(ssmAutomationRole.getRoleArn()))
@@ -1744,14 +1744,38 @@ public class ComplianceFactory extends BaseFactory {
             )
         ));
 
-        remediation.getNode().addDependency(rdsDeletionProtectionRule);
-        remediation.getNode().addDependency(rdsDeletionProtectionDocument);
+        remediation.getNode().addDependency(rule);
+        remediation.getNode().addDependency(document);
 
-        LOG.info("RDS deletion protection automatic remediation configured");
-        LOG.info("  SSM Document: " + rdsDeletionProtectionDocument.getRef());
-        LOG.info("  Mode: Automatic (enables deletion protection on non-compliant instances)");
+        LOG.info(spec.label() + " automatic remediation configured");
+        LOG.info("  SSM Document: " + document.getRef());
+        LOG.info("  Mode: Automatic (" + spec.mode() + ")");
         LOG.info("  Max attempts: 3, Retry interval: 120 seconds");
-        LOG.info("  Impact: SAFE - only enables protection, does not require downtime");
+        LOG.info("  Impact: " + spec.impact());
+    }
+
+    /**
+     * Creates automatic remediation for RDS deletion protection compliance.
+     * Enables deletion protection on non-compliant RDS instances.
+     *
+     * <p><b>Safety:</b> This is a SAFE remediation - it only enables protection, never disables it.</p>
+     * <p><b>Impact:</b> Protected databases cannot be accidentally deleted (requires manual disable first).</p>
+     *
+     * @param rdsDeletionProtectionRule The Config rule to remediate
+     */
+    private void createRdsDeletionProtectionRemediation(CfnConfigRule rdsDeletionProtectionRule) {
+        if (!Boolean.TRUE.equals(enableRdsDeletionProtectionRemediation)) {
+            LOG.info("RDS deletion protection remediation disabled (enableRdsDeletionProtectionRemediation = false)");
+            return;
+        }
+
+        createRdsInstanceRemediation(rdsDeletionProtectionRule, new RdsRemediation(
+            "RdsDeletionProtection", "RDS deletion protection", "RdsDeletionProtectionPolicy",
+            "enable-rds-deletion-protection", "Enable deletion protection on RDS instances",
+            "EnableDeletionProtection", "Enable deletion protection on RDS instance",
+            "DeletionProtection", true,
+            "enables deletion protection on non-compliant instances",
+            "SAFE - only enables protection, does not require downtime"));
     }
 
     /**
@@ -1764,105 +1788,19 @@ public class ComplianceFactory extends BaseFactory {
      * @param rdsAutoUpgradeRule The Config rule to remediate
      */
     private void createRdsAutoMinorVersionUpgradeRemediation(CfnConfigRule rdsAutoUpgradeRule) {
-
         if (!Boolean.TRUE.equals(enableRdsAutoMinorVersionUpgradeRemediation)) {
             LOG.info("RDS auto minor version upgrade remediation disabled (enableRdsAutoMinorVersionUpgradeRemediation = false)");
             return;
         }
 
-        LOG.info("Creating RDS automatic minor version upgrade remediation");
-
-        // Create IAM role for SSM Automation with RDS permissions
-        Role ssmAutomationRole = Role.Builder.create(this, "RdsAutoMinorVersionUpgradeRemediationRole")
-                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .description("Role for automated RDS auto minor version upgrade remediation")
-                .managedPolicies(List.of(
-                    ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMManagedInstanceCore")
-                ))
-                .inlinePolicies(Map.of(
-                    "RdsAutoUpgradePolicy", software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
-                        .statements(List.of(
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(List.of(
-                                    "rds:ModifyDBInstance",
-                                    "rds:DescribeDBInstances"
-                                ))
-                                .resources(List.of("*"))
-                                .build()
-                        ))
-                        .build()
-                ))
-                .build();
-
-        // Create custom SSM document for RDS auto minor version upgrade
-        CfnDocument rdsAutoUpgradeDocument = CfnDocument.Builder.create(
-                this, "RdsAutoMinorVersionUpgradeDocument")
-                .name(this.stackName + "-enable-rds-auto-minor-version-upgrade")
-                .documentType("Automation")
-                .documentFormat("JSON")
-                .content(Map.of(
-                    "schemaVersion", "0.3",
-                    "description", "Enable automatic minor version upgrades on RDS instances",
-                    "assumeRole", "{{ AutomationAssumeRole }}",
-                    "parameters", Map.of(
-                        "AutomationAssumeRole", Map.of(
-                            "type", "String",
-                            "description", "IAM role ARN for automation"
-                        ),
-                        "ResourceId", Map.of(
-                            "type", "String",
-                            "description", "RDS instance identifier"
-                        )
-                    ),
-                    "mainSteps", List.of(
-                        Map.of(
-                            "name", "EnableAutoMinorVersionUpgrade",
-                            "action", "aws:executeAwsApi",
-                            "inputs", Map.of(
-                                "Service", "rds",
-                                "Api", "ModifyDBInstance",
-                                "DBInstanceIdentifier", "{{ ResourceId }}",
-                                "AutoMinorVersionUpgrade", true,
-                                "ApplyImmediately", false
-                            ),
-                            "description", "Enable automatic minor version upgrades (applied during next maintenance window)"
-                        )
-                    )
-                ))
-                .build();
-
-        // Create remediation configuration
-        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "RdsAutoMinorVersionUpgradeRemediation")
-                .configRuleName(rdsAutoUpgradeRule.getRef())
-                .targetType("SSM_DOCUMENT")
-                .targetId(rdsAutoUpgradeDocument.getRef())
-                .targetVersion("1")
-                .automatic(true)  // Enable automatic remediation
-                .maximumAutomaticAttempts(3)
-                .retryAttemptSeconds(120)
-                .resourceType("AWS::RDS::DBInstance")
-                .build();
-
-        // Configure remediation parameters
-        remediation.addPropertyOverride("Parameters", Map.of(
-            "AutomationAssumeRole", Map.of(
-                "StaticValue", Map.of("Values", List.of(ssmAutomationRole.getRoleArn()))
-            ),
-            "ResourceId", Map.of(
-                "ResourceValue", Map.of("Value", "RESOURCE_ID")
-            )
-        ));
-
-        remediation.getNode().addDependency(rdsAutoUpgradeRule);
-        remediation.getNode().addDependency(rdsAutoUpgradeDocument);
-
-        LOG.info("RDS automatic minor version upgrade remediation configured");
-        LOG.info("  SSM Document: " + rdsAutoUpgradeDocument.getRef());
-        LOG.info("  Mode: Automatic (enables auto-upgrade during maintenance window)");
-        LOG.info("  Max attempts: 3, Retry interval: 120 seconds");
-        LOG.info("  Impact: SAFE - only minor versions, applied during maintenance window");
+        createRdsInstanceRemediation(rdsAutoUpgradeRule, new RdsRemediation(
+            "RdsAutoMinorVersionUpgrade", "RDS auto minor version upgrade", "RdsAutoUpgradePolicy",
+            "enable-rds-auto-minor-version-upgrade", "Enable automatic minor version upgrades on RDS instances",
+            "EnableAutoMinorVersionUpgrade",
+            "Enable automatic minor version upgrades (applied during next maintenance window)",
+            "AutoMinorVersionUpgrade", false,
+            "enables auto-upgrade during maintenance window",
+            "SAFE - only minor versions, applied during maintenance window"));
     }
 
     /**
@@ -1944,34 +1882,15 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Setting up AWS Config rules (no recorder dependency)");
 
         // Create managed rules without explicit dependency on recorder
-        createEncryptionConfigRulesWithoutRecorder();
+        createEncryptionConfigRules(null, null);
         createS3ConfigRulesWithoutRecorder();
         createIAMConfigRulesWithoutRecorder();
 
         if (security == SecurityProfile.PRODUCTION) {
-            createProductionConfigRulesWithoutRecorder();
+            createProductionConfigRules(null, null);
         }
 
         LOG.info("AWS Config rules configured (without recorder dependency)");
-    }
-
-    /**
-     * Creates Config rules for encryption compliance WITHOUT recorder dependency.
-     */
-    private void createEncryptionConfigRulesWithoutRecorder() {
-        CfnConfigRule.Builder.create(this, "EbsEncryptionRule")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_EBS_ENCRYPTION_BY_DEFAULT)
-                        .build())
-                .build();
-
-        CfnConfigRule.Builder.create(this, "S3BucketEncryptionRule")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED)
-                        .build())
-                .build();
     }
 
     /**
@@ -2017,98 +1936,6 @@ public class ComplianceFactory extends BaseFactory {
                         .sourceIdentifier(ManagedRuleIdentifiers.IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS)
                         .build())
                 .build();
-    }
-
-    /**
-     * Creates additional Config rules for production environments WITHOUT recorder dependency.
-     */
-    private void createProductionConfigRulesWithoutRecorder() {
-        // Build CloudTrail Config rule with parameters if CloudTrail was created
-        CfnConfigRule.Builder cloudTrailRuleBuilder = CfnConfigRule.Builder.create(this, "CloudTrailEnabledRule")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.CLOUD_TRAIL_ENABLED)
-                        .build());
-
-        // If CloudTrail was created, add input parameters for the Config rule
-        if (this.trail != null && this.trailBucket != null) {
-            try {
-                Map<String, Object> inputParams = new HashMap<>();
-                inputParams.put("s3BucketName", this.trailBucket.getBucketName());
-
-                // Add CloudWatch Logs log group ARN if available
-                if (this.trail.getLogGroup() != null) {
-                    inputParams.put("cloudWatchLogsLogGroupArn", this.trail.getLogGroup().getLogGroupArn());
-                }
-
-                // Add SNS topic ARN if available
-                CfnTrail cfnTrail = (CfnTrail) this.trail.getNode().getDefaultChild();
-                if (cfnTrail.getSnsTopicName() != null) {
-                    inputParams.put("snsTopicArn", cfnTrail.getSnsTopicName());
-                }
-
-                // Convert to JSON string for CloudFormation
-                String inputParamsJson = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(inputParams);
-                cloudTrailRuleBuilder.inputParameters(inputParamsJson);
-
-                LOG.info("CloudTrail Config rule (without recorder) configured with parameters: " + inputParamsJson);
-            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                LOG.warning("Failed to serialize CloudTrail Config rule parameters: " + e.getMessage());
-            }
-        }
-
-        CfnConfigRule cloudTrailRule = cloudTrailRuleBuilder.build();
-
-        // Add auto-remediation for CloudTrail bucket access errors if enabled (PRODUCTION only by default)
-        boolean shouldEnableCloudTrailBucketAccessRemediation = Boolean.TRUE.equals(enableCloudTrailBucketAccessRemediation)
-            || (enableCloudTrailBucketAccessRemediation == null && ctx.security == SecurityProfile.PRODUCTION);
-
-        if (shouldEnableCloudTrailBucketAccessRemediation) {
-            addCloudTrailBucketAccessRemediation(cloudTrailRule);
-        }
-
-        CfnConfigRule.Builder.create(this, "CloudTrailLogFileValidationRule")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.CLOUD_TRAIL_LOG_FILE_VALIDATION_ENABLED)
-                        .build())
-                .build();
-
-        CfnConfigRule.Builder.create(this, "VpcFlowLogsRule")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.VPC_FLOW_LOGS_ENABLED)
-                        .build())
-                .build();
-    }
-
-    /**
-     * Creates ALL framework-specific AWS Config rules WITHOUT recorder dependency.
-     * Used when createConfigInfrastructure = false.
-     */
-    private void createAllFrameworkConfigRulesWithoutRecorder() {
-        List<String> frameworks = determineFrameworks();
-
-        if (frameworks.isEmpty()) {
-            LOG.info("No compliance frameworks specified - all framework Config rules will be skipped via conditions");
-        } else {
-            LOG.info("Framework-specific Config rules enabled for: " + String.join(", ", frameworks));
-        }
-
-        // Always create ALL framework rules, using conditions to control deployment
-        LOG.info("Creating PCI-DSS Config rules (condition-controlled, no recorder dependency)");
-        createPciDssConfigRulesWithoutRecorder();
-
-        LOG.info("Creating SOC 2 Config rules (condition-controlled, no recorder dependency)");
-        createSoc2ConfigRulesWithoutRecorder();
-
-        LOG.info("Creating HIPAA Config rules (condition-controlled, no recorder dependency)");
-        createHipaaConfigRulesWithoutRecorder();
-
-        LOG.info("Creating GDPR Config rules (condition-controlled, no recorder dependency)");
-        createGdprConfigRulesWithoutRecorder();
-
-        LOG.info("All framework-specific Config rules created with conditions (no recorder dependency)");
     }
 
     /**
@@ -2162,131 +1989,61 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Creating PCI-DSS AWS Config rules (condition-controlled)");
 
         // Requirement 1: Network Segmentation
-        CfnConfigRule vpcDefaultSecurityGroupClosed = CfnConfigRule.Builder.create(this, "PciDssVpcDefaultSecurityGroupClosed")
-                .configRuleName(this.stackName + "-pci-dss-vpc-default-sg-closed")
-                .description("PCI-DSS Req 1.3: Prohibit direct public access between internet and cardholder data")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("VPC_DEFAULT_SECURITY_GROUP_CLOSED")
-                        .build())
-                .build();
-        vpcDefaultSecurityGroupClosed.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        vpcDefaultSecurityGroupClosed.addOverride("Condition", pciDssCondition.getLogicalId());
-        vpcDefaultSecurityGroupClosed.getNode().addDependency(recorder);
+        CfnConfigRule vpcDefaultSecurityGroupClosed = managedConfigRule("PciDssVpcDefaultSecurityGroupClosed", this.stackName + "-pci-dss-vpc-default-sg-closed",
+                "PCI-DSS Req 1.3: Prohibit direct public access between internet and cardholder data",
+                "VPC_DEFAULT_SECURITY_GROUP_CLOSED", pciDssCondition);
+        dependOnRecorder(vpcDefaultSecurityGroupClosed, recorder);
 
         // Requirement 2: Secure Configuration
-        CfnConfigRule ec2InstanceManagedBySsm = CfnConfigRule.Builder.create(this, "PciDssEc2ManagedBySsm")
-                .configRuleName(this.stackName + "-pci-dss-ec2-managed-by-ssm")
-                .description("PCI-DSS Req 2: Secure system configuration management")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_INSTANCE_MANAGED_BY_SSM)
-                        .build())
-                .build();
-        ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        ec2InstanceManagedBySsm.addOverride("Condition", pciDssCondition.getLogicalId());
-        ec2InstanceManagedBySsm.getNode().addDependency(recorder);
+        CfnConfigRule ec2InstanceManagedBySsm = managedConfigRule("PciDssEc2ManagedBySsm", this.stackName + "-pci-dss-ec2-managed-by-ssm",
+                "PCI-DSS Req 2: Secure system configuration management",
+                ManagedRuleIdentifiers.EC2_INSTANCE_MANAGED_BY_SSM, pciDssCondition);
+        dependOnRecorder(ec2InstanceManagedBySsm, recorder);
 
         // Requirement 3: Protect stored cardholder data
-        CfnConfigRule rdsEncryptionEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsEncryption")
-                .configRuleName(this.stackName + "-pci-dss-rds-encryption-enabled")
-                .description("PCI-DSS Req 3.4: Render cardholder data unreadable with encryption")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        rdsEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsEncryptionEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        rdsEncryptionEnabled.getNode().addDependency(recorder);
+        CfnConfigRule rdsEncryptionEnabled = managedConfigRule("PciDssRdsEncryption", this.stackName + "-pci-dss-rds-encryption-enabled",
+                "PCI-DSS Req 3.4: Render cardholder data unreadable with encryption",
+                "RDS_STORAGE_ENCRYPTED", pciDssRdsCondition);
+        dependOnRecorder(rdsEncryptionEnabled, recorder);
 
-        CfnConfigRule rdsPublicAccessCheck = CfnConfigRule.Builder.create(this, "PciDssRdsPublicAccess")
-                .configRuleName(this.stackName + "-pci-dss-rds-instance-public-access-check")
-                .description("PCI-DSS Req 1.3.1: Prohibit direct public access between internet and cardholder data")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        rdsPublicAccessCheck.addOverride("DeletionPolicy", "Delete");
-        rdsPublicAccessCheck.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        rdsPublicAccessCheck.getNode().addDependency(recorder);
+        CfnConfigRule rdsPublicAccessCheck = managedConfigRule("PciDssRdsPublicAccess", this.stackName + "-pci-dss-rds-instance-public-access-check",
+                "PCI-DSS Req 1.3.1: Prohibit direct public access between internet and cardholder data",
+                "RDS_INSTANCE_PUBLIC_ACCESS_CHECK", pciDssRdsCondition);
+        dependOnRecorder(rdsPublicAccessCheck, recorder);
 
-        CfnConfigRule rdsBackupEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsBackup")
-                .configRuleName(this.stackName + "-pci-dss-db-instance-backup-enabled")
-                .description("PCI-DSS Req 3.4: Protect stored cardholder data with backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        rdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsBackupEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        rdsBackupEnabled.getNode().addDependency(recorder);
+        CfnConfigRule rdsBackupEnabled = managedConfigRule("PciDssRdsBackup", this.stackName + "-pci-dss-db-instance-backup-enabled",
+                "PCI-DSS Req 3.4: Protect stored cardholder data with backups",
+                "DB_INSTANCE_BACKUP_ENABLED", pciDssRdsCondition);
+        dependOnRecorder(rdsBackupEnabled, recorder);
 
-        CfnConfigRule rdsAutoUpgrade = CfnConfigRule.Builder.create(this, "PciDssRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-pci-dss-rds-automatic-minor-version-upgrade")
-                .description("PCI-DSS Req 6.2: Ensure all system components are protected with security patches")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        rdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        rdsAutoUpgrade.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        rdsAutoUpgrade.getNode().addDependency(recorder);
+        CfnConfigRule rdsAutoUpgrade = managedConfigRule("PciDssRdsAutoUpgrade", this.stackName + "-pci-dss-rds-automatic-minor-version-upgrade",
+                "PCI-DSS Req 6.2: Ensure all system components are protected with security patches",
+                "RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED", pciDssRdsCondition);
+        dependOnRecorder(rdsAutoUpgrade, recorder);
         createRdsAutoMinorVersionUpgradeRemediation(rdsAutoUpgrade);
 
-        CfnConfigRule rdsLoggingEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsLogging")
-                .configRuleName(this.stackName + "-pci-dss-rds-logging-enabled")
-                .description("PCI-DSS Req 10.2: Implement automated audit trails for all system components")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        rdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsLoggingEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        rdsLoggingEnabled.getNode().addDependency(recorder);
+        CfnConfigRule rdsLoggingEnabled = managedConfigRule("PciDssRdsLogging", this.stackName + "-pci-dss-rds-logging-enabled",
+                "PCI-DSS Req 10.2: Implement automated audit trails for all system components",
+                "RDS_LOGGING_ENABLED", pciDssRdsCondition);
+        dependOnRecorder(rdsLoggingEnabled, recorder);
 
         // Requirement 4: Encrypt transmission
-        CfnConfigRule elbTlsHttpsListenersOnly = CfnConfigRule.Builder.create(this, "PciDssElbTlsOnly")
-                .configRuleName(this.stackName + "-pci-dss-elb-tls-https-only")
-                .description("PCI-DSS Req 4.1: Use strong cryptography for transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ELB_TLS_HTTPS_LISTENERS_ONLY")
-                        .build())
-                .build();
-        elbTlsHttpsListenersOnly.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        elbTlsHttpsListenersOnly.addOverride("Condition", pciDssCondition.getLogicalId());
-        elbTlsHttpsListenersOnly.getNode().addDependency(recorder);
+        CfnConfigRule elbTlsHttpsListenersOnly = managedConfigRule("PciDssElbTlsOnly", this.stackName + "-pci-dss-elb-tls-https-only",
+                "PCI-DSS Req 4.1: Use strong cryptography for transmission",
+                "ELB_TLS_HTTPS_LISTENERS_ONLY", pciDssCondition);
+        dependOnRecorder(elbTlsHttpsListenersOnly, recorder);
 
         // Requirement 7: Restrict access by business need to know
-        CfnConfigRule iamPolicyNoStatementsWithAdminAccess = CfnConfigRule.Builder.create(this, "PciDssIamNoAdminPolicy")
-                .configRuleName(this.stackName + "-pci-dss-iam-no-admin-policy")
-                .description("PCI-DSS Req 7.1: Limit access to system components by business need-to-know")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS")
-                        .build())
-                .build();
-        iamPolicyNoStatementsWithAdminAccess.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamPolicyNoStatementsWithAdminAccess.addOverride("Condition", pciDssCondition.getLogicalId());
-        iamPolicyNoStatementsWithAdminAccess.getNode().addDependency(recorder);
+        CfnConfigRule iamPolicyNoStatementsWithAdminAccess = managedConfigRule("PciDssIamNoAdminPolicy", this.stackName + "-pci-dss-iam-no-admin-policy",
+                "PCI-DSS Req 7.1: Limit access to system components by business need-to-know",
+                "IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS", pciDssCondition);
+        dependOnRecorder(iamPolicyNoStatementsWithAdminAccess, recorder);
 
         // Requirement 8: Identify and authenticate access
-        CfnConfigRule iamUserMfaEnabled = CfnConfigRule.Builder.create(this, "PciDssIamMfaEnabled")
-                .configRuleName(this.stackName + "-pci-dss-iam-user-mfa-enabled")
-                .description("PCI-DSS Req 8.3: Multi-factor authentication for remote access")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_MFA_ENABLED")
-                        .build())
-                .build();
-        iamUserMfaEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserMfaEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
-        iamUserMfaEnabled.getNode().addDependency(recorder);
+        CfnConfigRule iamUserMfaEnabled = managedConfigRule("PciDssIamMfaEnabled", this.stackName + "-pci-dss-iam-user-mfa-enabled",
+                "PCI-DSS Req 8.3: Multi-factor authentication for remote access",
+                "IAM_USER_MFA_ENABLED", pciDssCondition);
+        dependOnRecorder(iamUserMfaEnabled, recorder);
 
         // Requirement 10: Track and monitor access
         Map<String, Object> alarmActionParams = Map.of(
@@ -2305,20 +2062,13 @@ public class ComplianceFactory extends BaseFactory {
                 .build();
         cloudwatchAlarmActionCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
         cloudwatchAlarmActionCheck.addOverride("Condition", pciDssCondition.getLogicalId());
-        cloudwatchAlarmActionCheck.getNode().addDependency(recorder);
+        dependOnRecorder(cloudwatchAlarmActionCheck, recorder);
 
         // Requirement 11: Test security systems
-        CfnConfigRule guardDutyEnabledCentralized = CfnConfigRule.Builder.create(this, "PciDssGuardDutyEnabled")
-                .configRuleName(this.stackName + "-pci-dss-guardduty-enabled")
-                .description("PCI-DSS Req 11.4: Use intrusion detection systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("GUARDDUTY_ENABLED_CENTRALIZED")
-                        .build())
-                .build();
-        guardDutyEnabledCentralized.addOverride("DeletionPolicy", "Delete");
-        guardDutyEnabledCentralized.addOverride("Condition", pciDssCondition.getLogicalId());
-        guardDutyEnabledCentralized.getNode().addDependency(recorder);
+        CfnConfigRule guardDutyEnabledCentralized = managedConfigRule("PciDssGuardDutyEnabled", this.stackName + "-pci-dss-guardduty-enabled",
+                "PCI-DSS Req 11.4: Use intrusion detection systems",
+                "GUARDDUTY_ENABLED_CENTRALIZED", pciDssCondition);
+        dependOnRecorder(guardDutyEnabledCentralized, recorder);
 
         // Automatic remediation: enables GuardDuty if not already enabled (PRODUCTION only by default)
         if (Boolean.TRUE.equals(enableGuardDutyRemediation) ||
@@ -2339,56 +2089,28 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Creating SOC 2 AWS Config rules (condition-controlled)");
 
         // CC6.1: Logical Access Controls
-        CfnConfigRule iamUserNoPolicies = CfnConfigRule.Builder.create(this, "Soc2IamUserNoPolicies")
-                .configRuleName(this.stackName + "-soc2-iam-user-no-policies")
-                .description("SOC 2 CC6.1: Implement role-based access control")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_NO_POLICIES_CHECK")
-                        .build())
-                .build();
-        iamUserNoPolicies.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserNoPolicies.addOverride("Condition", soc2Condition.getLogicalId());
-        iamUserNoPolicies.getNode().addDependency(recorder);
+        CfnConfigRule iamUserNoPolicies = managedConfigRule("Soc2IamUserNoPolicies", this.stackName + "-soc2-iam-user-no-policies",
+                "SOC 2 CC6.1: Implement role-based access control",
+                "IAM_USER_NO_POLICIES_CHECK", soc2Condition);
+        dependOnRecorder(iamUserNoPolicies, recorder);
 
         // CC6.6: Network Segmentation
-        CfnConfigRule restrictedSshCheck = CfnConfigRule.Builder.create(this, "Soc2RestrictedSsh")
-                .configRuleName(this.stackName + "-soc2-restricted-ssh")
-                .description("SOC 2 CC6.6: Network segmentation and access control")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED)
-                        .build())
-                .build();
-        restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        restrictedSshCheck.addOverride("Condition", soc2Condition.getLogicalId());
-        restrictedSshCheck.getNode().addDependency(recorder);
+        CfnConfigRule restrictedSshCheck = managedConfigRule("Soc2RestrictedSsh", this.stackName + "-soc2-restricted-ssh",
+                "SOC 2 CC6.6: Network segmentation and access control",
+                ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED, soc2Condition);
+        dependOnRecorder(restrictedSshCheck, recorder);
 
         // CC6.7: Transmission Encryption
-        CfnConfigRule albHttpToHttpsRedirection = CfnConfigRule.Builder.create(this, "Soc2AlbHttpsRedirection")
-                .configRuleName(this.stackName + "-soc2-alb-https-redirection")
-                .description("SOC 2 CC6.7: Encrypt data in transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK")
-                        .build())
-                .build();
-        albHttpToHttpsRedirection.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        albHttpToHttpsRedirection.addOverride("Condition", soc2Condition.getLogicalId());
-        albHttpToHttpsRedirection.getNode().addDependency(recorder);
+        CfnConfigRule albHttpToHttpsRedirection = managedConfigRule("Soc2AlbHttpsRedirection", this.stackName + "-soc2-alb-https-redirection",
+                "SOC 2 CC6.7: Encrypt data in transmission",
+                "ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK", soc2Condition);
+        dependOnRecorder(albHttpToHttpsRedirection, recorder);
 
         // CC7.2: System Monitoring
-        CfnConfigRule securityHubEnabled = CfnConfigRule.Builder.create(this, "Soc2SecurityHubEnabled")
-                .configRuleName(this.stackName + "-soc2-security-hub-enabled")
-                .description("SOC 2 CC7.2: Monitor system components for anomalies")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("SECURITYHUB_ENABLED")
-                        .build())
-                .build();
-        securityHubEnabled.addOverride("DeletionPolicy", "Delete");
-        securityHubEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-        securityHubEnabled.getNode().addDependency(recorder);
+        CfnConfigRule securityHubEnabled = managedConfigRule("Soc2SecurityHubEnabled", this.stackName + "-soc2-security-hub-enabled",
+                "SOC 2 CC7.2: Monitor system components for anomalies",
+                "SECURITYHUB_ENABLED", soc2Condition);
+        dependOnRecorder(securityHubEnabled, recorder);
 
         // Automatic remediation: enables Security Hub if not already enabled (PRODUCTION only by default)
         if (Boolean.TRUE.equals(enableSecurityHubRemediation) ||
@@ -2397,17 +2119,10 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         // CC7.2: Vulnerability Scanning
-        CfnConfigRule inspectorEnabled = CfnConfigRule.Builder.create(this, "Soc2InspectorEnabled")
-                .configRuleName(this.stackName + "-soc2-inspector-enabled")
-                .description("SOC 2 CC7.2: Continuous vulnerability scanning")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("INSPECTOR_EC2_SCAN_ENABLED")
-                        .build())
-                .build();
-        inspectorEnabled.addOverride("DeletionPolicy", "Delete");
-        inspectorEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-        inspectorEnabled.getNode().addDependency(recorder);
+        CfnConfigRule inspectorEnabled = managedConfigRule("Soc2InspectorEnabled", this.stackName + "-soc2-inspector-enabled",
+                "SOC 2 CC7.2: Continuous vulnerability scanning",
+                "INSPECTOR_EC2_SCAN_ENABLED", soc2Condition);
+        dependOnRecorder(inspectorEnabled, recorder);
 
         // Automatic remediation: enables Inspector if not already enabled (PRODUCTION only by default)
         if (Boolean.TRUE.equals(enableInspectorRemediation) ||
@@ -2416,17 +2131,10 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         // CC7.2: Sensitive Data Protection
-        CfnConfigRule macieEnabled = CfnConfigRule.Builder.create(this, "Soc2MacieEnabled")
-                .configRuleName(this.stackName + "-soc2-macie-enabled")
-                .description("SOC 2 CC7.2: Sensitive data discovery and protection")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("MACIE_STATUS_CHECK")
-                        .build())
-                .build();
-        macieEnabled.addOverride("DeletionPolicy", "Delete");
-        macieEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-        macieEnabled.getNode().addDependency(recorder);
+        CfnConfigRule macieEnabled = managedConfigRule("Soc2MacieEnabled", this.stackName + "-soc2-macie-enabled",
+                "SOC 2 CC7.2: Sensitive data discovery and protection",
+                "MACIE_STATUS_CHECK", soc2Condition);
+        dependOnRecorder(macieEnabled, recorder);
 
         // Automatic remediation: enables Macie if not already enabled (PRODUCTION only by default)
         if (Boolean.TRUE.equals(enableMacieRemediation) ||
@@ -2435,134 +2143,64 @@ public class ComplianceFactory extends BaseFactory {
         }
 
         // CC8.1: Change Management
-        CfnConfigRule cloudtrailS3DataEventsEnabled = CfnConfigRule.Builder.create(this, "Soc2CloudTrailS3DataEvents")
-                .configRuleName(this.stackName + "-soc2-cloudtrail-s3-data-events")
-                .description("SOC 2 CC8.1: Track and authorize infrastructure changes")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUDTRAIL_S3_DATAEVENTS_ENABLED")
-                        .build())
-                .build();
-        cloudtrailS3DataEventsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailS3DataEventsEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-        cloudtrailS3DataEventsEnabled.getNode().addDependency(recorder);
+        CfnConfigRule cloudtrailS3DataEventsEnabled = managedConfigRule("Soc2CloudTrailS3DataEvents", this.stackName + "-soc2-cloudtrail-s3-data-events",
+                "SOC 2 CC8.1: Track and authorize infrastructure changes",
+                "CLOUDTRAIL_S3_DATAEVENTS_ENABLED", soc2Condition);
+        dependOnRecorder(cloudtrailS3DataEventsEnabled, recorder);
 
         // A1.2: High Availability (for production)
         // A1.3: Data Backup
-        CfnConfigRule soc2RdsBackupEnabled = CfnConfigRule.Builder.create(this, "Soc2RdsBackup")
-                .configRuleName(this.stackName + "-soc2-db-instance-backup-enabled")
-                .description("SOC 2 A1.3: Implement data backup procedures")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        soc2RdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        soc2RdsBackupEnabled.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        soc2RdsBackupEnabled.getNode().addDependency(recorder);
+        CfnConfigRule soc2RdsBackupEnabled = managedConfigRule("Soc2RdsBackup", this.stackName + "-soc2-db-instance-backup-enabled",
+                "SOC 2 A1.3: Implement data backup procedures",
+                "DB_INSTANCE_BACKUP_ENABLED", soc2RdsCondition);
+        dependOnRecorder(soc2RdsBackupEnabled, recorder);
 
         // CC6.1: Logical Access Security Controls
-        CfnConfigRule soc2RdsPublicAccess = CfnConfigRule.Builder.create(this, "Soc2RdsPublicAccess")
-                .configRuleName(this.stackName + "-soc2-rds-instance-public-access-check")
-                .description("SOC 2 CC6.1: Restrict logical access to databases")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        soc2RdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        soc2RdsPublicAccess.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        soc2RdsPublicAccess.getNode().addDependency(recorder);
+        CfnConfigRule soc2RdsPublicAccess = managedConfigRule("Soc2RdsPublicAccess", this.stackName + "-soc2-rds-instance-public-access-check",
+                "SOC 2 CC6.1: Restrict logical access to databases",
+                "RDS_INSTANCE_PUBLIC_ACCESS_CHECK", soc2RdsCondition);
+        dependOnRecorder(soc2RdsPublicAccess, recorder);
 
         // CC6.1: Encryption Controls
-        CfnConfigRule soc2RdsEncryption = CfnConfigRule.Builder.create(this, "Soc2RdsEncryption")
-                .configRuleName(this.stackName + "-soc2-rds-storage-encrypted")
-                .description("SOC 2 CC6.1: Encrypt data at rest to protect logical access")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        soc2RdsEncryption.addOverride("DeletionPolicy", "Delete");
-        soc2RdsEncryption.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        soc2RdsEncryption.getNode().addDependency(recorder);
+        CfnConfigRule soc2RdsEncryption = managedConfigRule("Soc2RdsEncryption", this.stackName + "-soc2-rds-storage-encrypted",
+                "SOC 2 CC6.1: Encrypt data at rest to protect logical access",
+                "RDS_STORAGE_ENCRYPTED", soc2RdsCondition);
+        dependOnRecorder(soc2RdsEncryption, recorder);
 
         // CC7.2: System Monitoring
-        CfnConfigRule soc2RdsLogging = CfnConfigRule.Builder.create(this, "Soc2RdsLogging")
-                .configRuleName(this.stackName + "-soc2-rds-logging-enabled")
-                .description("SOC 2 CC7.2: Enable logging to monitor and detect system anomalies")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        soc2RdsLogging.addOverride("DeletionPolicy", "Delete");
-        soc2RdsLogging.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        soc2RdsLogging.getNode().addDependency(recorder);
+        CfnConfigRule soc2RdsLogging = managedConfigRule("Soc2RdsLogging", this.stackName + "-soc2-rds-logging-enabled",
+                "SOC 2 CC7.2: Enable logging to monitor and detect system anomalies",
+                "RDS_LOGGING_ENABLED", soc2RdsCondition);
+        dependOnRecorder(soc2RdsLogging, recorder);
 
         // CC7.1: System Operations
-        CfnConfigRule soc2RdsAutoUpgrade = CfnConfigRule.Builder.create(this, "Soc2RdsAutoUpgrade")
-                .configRuleName(this.stackName + "-soc2-rds-automatic-minor-version-upgrade")
-                .description("SOC 2 CC7.1: Ensure systems are updated with security patches")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        soc2RdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        soc2RdsAutoUpgrade.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        soc2RdsAutoUpgrade.getNode().addDependency(recorder);
+        CfnConfigRule soc2RdsAutoUpgrade = managedConfigRule("Soc2RdsAutoUpgrade", this.stackName + "-soc2-rds-automatic-minor-version-upgrade",
+                "SOC 2 CC7.1: Ensure systems are updated with security patches",
+                "RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED", soc2RdsCondition);
+        dependOnRecorder(soc2RdsAutoUpgrade, recorder);
         createRdsAutoMinorVersionUpgradeRemediation(soc2RdsAutoUpgrade);
 
         if (security == SecurityProfile.PRODUCTION) {
-            CfnConfigRule rdsMultiAz = CfnConfigRule.Builder.create(this, "Soc2RdsMultiAz")
-                    .configRuleName(this.stackName + "-soc2-rds-multi-az-support")
-                    .description("SOC 2 A1.2: Deploy across multiple availability zones")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_MULTI_AZ_SUPPORT")
-                            .build())
-                    .build();
-            rdsMultiAz.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            rdsMultiAz.addOverride("Condition", soc2RdsCondition.getLogicalId());
-            rdsMultiAz.getNode().addDependency(recorder);
+            CfnConfigRule rdsMultiAz = managedConfigRule("Soc2RdsMultiAz", this.stackName + "-soc2-rds-multi-az-support",
+                    "SOC 2 A1.2: Deploy across multiple availability zones",
+                    "RDS_MULTI_AZ_SUPPORT", soc2RdsCondition);
+            dependOnRecorder(rdsMultiAz, recorder);
 
-            CfnConfigRule soc2RdsDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2RdsDeletionProtection")
-                    .configRuleName(this.stackName + "-soc2-rds-deletion-protection-enabled")
-                    .description("SOC 2 A1.2: Protect critical databases from accidental deletion")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                            .build())
-                    .build();
-            soc2RdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-            soc2RdsDeletionProtection.addOverride("Condition", soc2RdsCondition.getLogicalId());
-            soc2RdsDeletionProtection.getNode().addDependency(recorder);
+            CfnConfigRule soc2RdsDeletionProtection = managedConfigRule("Soc2RdsDeletionProtection", this.stackName + "-soc2-rds-deletion-protection-enabled",
+                    "SOC 2 A1.2: Protect critical databases from accidental deletion",
+                    "RDS_INSTANCE_DELETION_PROTECTION_ENABLED", soc2RdsCondition);
+            dependOnRecorder(soc2RdsDeletionProtection, recorder);
             createRdsDeletionProtectionRemediation(soc2RdsDeletionProtection);
 
-            CfnConfigRule soc2RdsEnhancedMonitoring = CfnConfigRule.Builder.create(this, "Soc2RdsEnhancedMonitoring")
-                    .configRuleName(this.stackName + "-soc2-rds-enhanced-monitoring-enabled")
-                    .description("SOC 2 CC7.2: Monitor system components and detect anomalies")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_ENHANCED_MONITORING_ENABLED")
-                            .build())
-                    .build();
-            soc2RdsEnhancedMonitoring.addOverride("DeletionPolicy", "Delete");
-            soc2RdsEnhancedMonitoring.addOverride("Condition", soc2Condition.getLogicalId());
-            soc2RdsEnhancedMonitoring.getNode().addDependency(recorder);
+            CfnConfigRule soc2RdsEnhancedMonitoring = managedConfigRule("Soc2RdsEnhancedMonitoring", this.stackName + "-soc2-rds-enhanced-monitoring-enabled",
+                    "SOC 2 CC7.2: Monitor system components and detect anomalies",
+                    "RDS_ENHANCED_MONITORING_ENABLED", soc2Condition);
+            dependOnRecorder(soc2RdsEnhancedMonitoring, recorder);
 
-            CfnConfigRule elbDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2ElbDeletionProtection")
-                    .configRuleName(this.stackName + "-soc2-elb-deletion-protection")
-                    .description("SOC 2 A1.2: Protect critical components from accidental deletion")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("ELB_DELETION_PROTECTION_ENABLED")
-                            .build())
-                    .build();
-            elbDeletionProtection.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            elbDeletionProtection.addOverride("Condition", soc2Condition.getLogicalId());
-            elbDeletionProtection.getNode().addDependency(recorder);
+            CfnConfigRule elbDeletionProtection = managedConfigRule("Soc2ElbDeletionProtection", this.stackName + "-soc2-elb-deletion-protection",
+                    "SOC 2 A1.2: Protect critical components from accidental deletion",
+                    "ELB_DELETION_PROTECTION_ENABLED", soc2Condition);
+            dependOnRecorder(elbDeletionProtection, recorder);
         }
 
         LOG.info("Created " + (security == SecurityProfile.PRODUCTION ? "7" : "5") + " SOC 2 Config rules with conditional deployment");
@@ -2578,181 +2216,83 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Creating HIPAA AWS Config rules (condition-controlled)");
 
         // §164.308(a)(1): Security Management Process
-        CfnConfigRule cloudtrailCloudwatchLogsEnabled = CfnConfigRule.Builder.create(this, "HipaaCloudTrailCloudWatchLogs")
-                .configRuleName(this.stackName + "-hipaa-cloudtrail-cloudwatch-logs")
-                .description("HIPAA §164.308(a)(1)(ii)(D): Information system activity review")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUD_TRAIL_CLOUD_WATCH_LOGS_ENABLED")
-                        .build())
-                .build();
-        cloudtrailCloudwatchLogsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailCloudwatchLogsEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-        cloudtrailCloudwatchLogsEnabled.getNode().addDependency(recorder);
+        CfnConfigRule cloudtrailCloudwatchLogsEnabled = managedConfigRule("HipaaCloudTrailCloudWatchLogs", this.stackName + "-hipaa-cloudtrail-cloudwatch-logs",
+                "HIPAA §164.308(a)(1)(ii)(D): Information system activity review",
+                "CLOUD_TRAIL_CLOUD_WATCH_LOGS_ENABLED", hipaaCondition);
+        dependOnRecorder(cloudtrailCloudwatchLogsEnabled, recorder);
 
         // §164.308(a)(3): Workforce Security
-        CfnConfigRule iamUserGroupMembershipCheck = CfnConfigRule.Builder.create(this, "HipaaIamGroupMembership")
-                .configRuleName(this.stackName + "-hipaa-iam-group-membership")
-                .description("HIPAA §164.308(a)(3): Implement procedures for workforce clearance")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_GROUP_MEMBERSHIP_CHECK")
-                        .build())
-                .build();
-        iamUserGroupMembershipCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserGroupMembershipCheck.addOverride("Condition", hipaaCondition.getLogicalId());
-        iamUserGroupMembershipCheck.getNode().addDependency(recorder);
+        CfnConfigRule iamUserGroupMembershipCheck = managedConfigRule("HipaaIamGroupMembership", this.stackName + "-hipaa-iam-group-membership",
+                "HIPAA §164.308(a)(3): Implement procedures for workforce clearance",
+                "IAM_USER_GROUP_MEMBERSHIP_CHECK", hipaaCondition);
+        dependOnRecorder(iamUserGroupMembershipCheck, recorder);
 
         // §164.310(d): Device and Media Controls (Backup)
-        CfnConfigRule dynamodbPitrEnabled = CfnConfigRule.Builder.create(this, "HipaaDynamoDbPitr")
-                .configRuleName(this.stackName + "-hipaa-dynamodb-pitr-enabled")
-                .description("HIPAA §164.310(d)(2)(iv): Create backup copies of ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DYNAMODB_PITR_ENABLED")
-                        .build())
-                .build();
-        dynamodbPitrEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        dynamodbPitrEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-        dynamodbPitrEnabled.getNode().addDependency(recorder);
+        CfnConfigRule dynamodbPitrEnabled = managedConfigRule("HipaaDynamoDbPitr", this.stackName + "-hipaa-dynamodb-pitr-enabled",
+                "HIPAA §164.310(d)(2)(iv): Create backup copies of ePHI",
+                "DYNAMODB_PITR_ENABLED", hipaaCondition);
+        dependOnRecorder(dynamodbPitrEnabled, recorder);
 
-        CfnConfigRule rdsSnapshotEncrypted = CfnConfigRule.Builder.create(this, "HipaaRdsSnapshotEncrypted")
-                .configRuleName(this.stackName + "-hipaa-rds-snapshot-encrypted")
-                .description("HIPAA §164.312(a)(2)(iv): Encrypt ePHI backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_SNAPSHOT_ENCRYPTED")
-                        .build())
-                .build();
-        rdsSnapshotEncrypted.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsSnapshotEncrypted.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        rdsSnapshotEncrypted.getNode().addDependency(recorder);
+        CfnConfigRule rdsSnapshotEncrypted = managedConfigRule("HipaaRdsSnapshotEncrypted", this.stackName + "-hipaa-rds-snapshot-encrypted",
+                "HIPAA §164.312(a)(2)(iv): Encrypt ePHI backups",
+                "RDS_SNAPSHOT_ENCRYPTED", hipaaRdsCondition);
+        dependOnRecorder(rdsSnapshotEncrypted, recorder);
 
-        CfnConfigRule hipaaRdsEncryption = CfnConfigRule.Builder.create(this, "HipaaRdsEncryption")
-                .configRuleName(this.stackName + "-hipaa-rds-storage-encrypted")
-                .description("HIPAA §164.312(a)(2)(iv): Encrypt ePHI at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        hipaaRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsEncryption.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsEncryption.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsEncryption = managedConfigRule("HipaaRdsEncryption", this.stackName + "-hipaa-rds-storage-encrypted",
+                "HIPAA §164.312(a)(2)(iv): Encrypt ePHI at rest",
+                "RDS_STORAGE_ENCRYPTED", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsEncryption, recorder);
 
-        CfnConfigRule hipaaRdsPublicAccess = CfnConfigRule.Builder.create(this, "HipaaRdsPublicAccess")
-                .configRuleName(this.stackName + "-hipaa-rds-instance-public-access-check")
-                .description("HIPAA §164.308(a)(4)(ii)(B): Implement access management controls")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        hipaaRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsPublicAccess.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsPublicAccess.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsPublicAccess = managedConfigRule("HipaaRdsPublicAccess", this.stackName + "-hipaa-rds-instance-public-access-check",
+                "HIPAA §164.308(a)(4)(ii)(B): Implement access management controls",
+                "RDS_INSTANCE_PUBLIC_ACCESS_CHECK", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsPublicAccess, recorder);
 
-        CfnConfigRule hipaaRdsBackupEnabled = CfnConfigRule.Builder.create(this, "HipaaRdsBackup")
-                .configRuleName(this.stackName + "-hipaa-db-instance-backup-enabled")
-                .description("HIPAA §164.310(d)(2)(iii): Create retrievable backup copies of ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsBackupEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsBackupEnabled.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsBackupEnabled = managedConfigRule("HipaaRdsBackup", this.stackName + "-hipaa-db-instance-backup-enabled",
+                "HIPAA §164.310(d)(2)(iii): Create retrievable backup copies of ePHI",
+                "DB_INSTANCE_BACKUP_ENABLED", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsBackupEnabled, recorder);
 
-        CfnConfigRule hipaaRdsAutoUpgrade = CfnConfigRule.Builder.create(this, "HipaaRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-hipaa-rds-automatic-minor-version-upgrade")
-                .description("HIPAA §164.308(a)(5)(ii)(B): Install security patches and updates")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsAutoUpgrade.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsAutoUpgrade.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsAutoUpgrade = managedConfigRule("HipaaRdsAutoUpgrade", this.stackName + "-hipaa-rds-automatic-minor-version-upgrade",
+                "HIPAA §164.308(a)(5)(ii)(B): Install security patches and updates",
+                "RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsAutoUpgrade, recorder);
         createRdsAutoMinorVersionUpgradeRemediation(hipaaRdsAutoUpgrade);
 
-        CfnConfigRule hipaaRdsLoggingEnabled = CfnConfigRule.Builder.create(this, "HipaaRdsLogging")
-                .configRuleName(this.stackName + "-hipaa-rds-logging-enabled")
-                .description("HIPAA §164.312(b): Implement hardware/software audit controls")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsLoggingEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsLoggingEnabled.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsLoggingEnabled = managedConfigRule("HipaaRdsLogging", this.stackName + "-hipaa-rds-logging-enabled",
+                "HIPAA §164.312(b): Implement hardware/software audit controls",
+                "RDS_LOGGING_ENABLED", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsLoggingEnabled, recorder);
 
-        CfnConfigRule hipaaRdsDeletionProtection = CfnConfigRule.Builder.create(this, "HipaaRdsDeletionProtection")
-                .configRuleName(this.stackName + "-hipaa-rds-deletion-protection-enabled")
-                .description("HIPAA §164.308(a)(7)(ii)(A): Establish data backup contingency plan")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsDeletionProtection.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        hipaaRdsDeletionProtection.getNode().addDependency(recorder);
+        CfnConfigRule hipaaRdsDeletionProtection = managedConfigRule("HipaaRdsDeletionProtection", this.stackName + "-hipaa-rds-deletion-protection-enabled",
+                "HIPAA §164.308(a)(7)(ii)(A): Establish data backup contingency plan",
+                "RDS_INSTANCE_DELETION_PROTECTION_ENABLED", hipaaRdsCondition);
+        dependOnRecorder(hipaaRdsDeletionProtection, recorder);
         createRdsDeletionProtectionRemediation(hipaaRdsDeletionProtection);
 
         // §164.312(a)(1): Access Control
-        CfnConfigRule rootAccountMfaEnabled = CfnConfigRule.Builder.create(this, "HipaaRootMfaEnabled")
-                .configRuleName(this.stackName + "-hipaa-root-account-mfa-enabled")
-                .description("HIPAA §164.312(a)(2)(i): Assign unique user identification")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ROOT_ACCOUNT_MFA_ENABLED")
-                        .build())
-                .build();
-        rootAccountMfaEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rootAccountMfaEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-        rootAccountMfaEnabled.getNode().addDependency(recorder);
+        CfnConfigRule rootAccountMfaEnabled = managedConfigRule("HipaaRootMfaEnabled", this.stackName + "-hipaa-root-account-mfa-enabled",
+                "HIPAA §164.312(a)(2)(i): Assign unique user identification",
+                "ROOT_ACCOUNT_MFA_ENABLED", hipaaCondition);
+        dependOnRecorder(rootAccountMfaEnabled, recorder);
 
         // §164.312(b): Audit Controls
-        CfnConfigRule albWafEnabled = CfnConfigRule.Builder.create(this, "HipaaAlbWafEnabled")
-                .configRuleName(this.stackName + "-hipaa-alb-waf-enabled")
-                .description("HIPAA §164.312(b): Record and examine activity in systems with ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ALB_WAF_ENABLED")
-                        .build())
-                .build();
-        albWafEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        albWafEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-        albWafEnabled.getNode().addDependency(recorder);
+        CfnConfigRule albWafEnabled = managedConfigRule("HipaaAlbWafEnabled", this.stackName + "-hipaa-alb-waf-enabled",
+                "HIPAA §164.312(b): Record and examine activity in systems with ePHI",
+                "ALB_WAF_ENABLED", hipaaCondition);
+        dependOnRecorder(albWafEnabled, recorder);
 
         // §164.312(c)(1): Integrity Controls
-        CfnConfigRule cloudtrailEncryptionEnabled = CfnConfigRule.Builder.create(this, "HipaaCloudTrailEncryption")
-                .configRuleName(this.stackName + "-hipaa-cloudtrail-encryption-enabled")
-                .description("HIPAA §164.312(c)(2): Authenticate ePHI integrity")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUD_TRAIL_ENCRYPTION_ENABLED")
-                        .build())
-                .build();
-        cloudtrailEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailEncryptionEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-        cloudtrailEncryptionEnabled.getNode().addDependency(recorder);
+        CfnConfigRule cloudtrailEncryptionEnabled = managedConfigRule("HipaaCloudTrailEncryption", this.stackName + "-hipaa-cloudtrail-encryption-enabled",
+                "HIPAA §164.312(c)(2): Authenticate ePHI integrity",
+                "CLOUD_TRAIL_ENCRYPTION_ENABLED", hipaaCondition);
+        dependOnRecorder(cloudtrailEncryptionEnabled, recorder);
 
         // §164.312(e)(1): Transmission Security
-        CfnConfigRule elbAcmCertificateRequired = CfnConfigRule.Builder.create(this, "HipaaElbAcmCertificate")
-                .configRuleName(this.stackName + "-hipaa-elb-acm-certificate-required")
-                .description("HIPAA §164.312(e)(2)(ii): Encrypt ePHI during transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ELB_ACM_CERTIFICATE_REQUIRED")
-                        .build())
-                .build();
-        elbAcmCertificateRequired.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        elbAcmCertificateRequired.addOverride("Condition", hipaaCondition.getLogicalId());
-        elbAcmCertificateRequired.getNode().addDependency(recorder);
+        CfnConfigRule elbAcmCertificateRequired = managedConfigRule("HipaaElbAcmCertificate", this.stackName + "-hipaa-elb-acm-certificate-required",
+                "HIPAA §164.312(e)(2)(ii): Encrypt ePHI during transmission",
+                "ELB_ACM_CERTIFICATE_REQUIRED", hipaaCondition);
+        dependOnRecorder(elbAcmCertificateRequired, recorder);
 
         LOG.info("Created 8 HIPAA Config rules with conditional deployment");
     }
@@ -2767,945 +2307,96 @@ public class ComplianceFactory extends BaseFactory {
         LOG.info("Creating GDPR AWS Config rules (condition-controlled)");
 
         // Article 25: Data Protection by Design
-        CfnConfigRule ec2EbsOptimized = CfnConfigRule.Builder.create(this, "GdprEc2EbsOptimized")
-                .configRuleName(this.stackName + "-gdpr-ec2-ebs-optimized")
-                .description("GDPR Art. 25: Data protection by design - optimize storage security")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EBS_OPTIMIZED_INSTANCE)
-                        .build())
-                .build();
-        ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        ec2EbsOptimized.addOverride("Condition", gdprCondition.getLogicalId());
-        ec2EbsOptimized.getNode().addDependency(recorder);
+        CfnConfigRule ec2EbsOptimized = managedConfigRule("GdprEc2EbsOptimized", this.stackName + "-gdpr-ec2-ebs-optimized",
+                "GDPR Art. 25: Data protection by design - optimize storage security",
+                ManagedRuleIdentifiers.EBS_OPTIMIZED_INSTANCE, gdprCondition);
+        dependOnRecorder(ec2EbsOptimized, recorder);
 
         // Article 30: Records of Processing Activities
-        CfnConfigRule vpcFlowLogsEnabled = CfnConfigRule.Builder.create(this, "GdprVpcFlowLogs")
-                .configRuleName(this.stackName + "-gdpr-vpc-flow-logs-enabled")
-                .description("GDPR Art. 30(1): Maintain records of processing activities")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("VPC_FLOW_LOGS_ENABLED")
-                        .build())
-                .build();
-        vpcFlowLogsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        vpcFlowLogsEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-        vpcFlowLogsEnabled.getNode().addDependency(recorder);
+        CfnConfigRule vpcFlowLogsEnabled = managedConfigRule("GdprVpcFlowLogs", this.stackName + "-gdpr-vpc-flow-logs-enabled",
+                "GDPR Art. 30(1): Maintain records of processing activities",
+                "VPC_FLOW_LOGS_ENABLED", gdprCondition);
+        dependOnRecorder(vpcFlowLogsEnabled, recorder);
 
         // Article 32(1)(a): Pseudonymisation and Encryption
-        CfnConfigRule s3DefaultEncryptionKms = CfnConfigRule.Builder.create(this, "GdprS3DefaultEncryptionKms")
-                .configRuleName(this.stackName + "-gdpr-s3-default-encryption-kms")
-                .description("GDPR Art. 32(1)(a): Encrypt personal data at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("S3_DEFAULT_ENCRYPTION_KMS")
-                        .build())
-                .build();
-        s3DefaultEncryptionKms.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        s3DefaultEncryptionKms.addOverride("Condition", gdprCondition.getLogicalId());
-        s3DefaultEncryptionKms.getNode().addDependency(recorder);
+        CfnConfigRule s3DefaultEncryptionKms = managedConfigRule("GdprS3DefaultEncryptionKms", this.stackName + "-gdpr-s3-default-encryption-kms",
+                "GDPR Art. 32(1)(a): Encrypt personal data at rest",
+                "S3_DEFAULT_ENCRYPTION_KMS", gdprCondition);
+        dependOnRecorder(s3DefaultEncryptionKms, recorder);
 
-        CfnConfigRule kmsBackingKeyRotationEnabled = CfnConfigRule.Builder.create(this, "GdprKmsKeyRotation")
-                .configRuleName(this.stackName + "-gdpr-kms-backing-key-rotation")
-                .description("GDPR Art. 32(1)(a): Rotate encryption keys regularly")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CMK_BACKING_KEY_ROTATION_ENABLED")
-                        .build())
-                .build();
-        kmsBackingKeyRotationEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        kmsBackingKeyRotationEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-        kmsBackingKeyRotationEnabled.getNode().addDependency(recorder);
+        CfnConfigRule kmsBackingKeyRotationEnabled = managedConfigRule("GdprKmsKeyRotation", this.stackName + "-gdpr-kms-backing-key-rotation",
+                "GDPR Art. 32(1)(a): Rotate encryption keys regularly",
+                "CMK_BACKING_KEY_ROTATION_ENABLED", gdprCondition);
+        dependOnRecorder(kmsBackingKeyRotationEnabled, recorder);
 
-        CfnConfigRule gdprRdsEncryption = CfnConfigRule.Builder.create(this, "GdprRdsEncryption")
-                .configRuleName(this.stackName + "-gdpr-rds-storage-encrypted")
-                .description("GDPR Art. 32(1)(a): Encrypt personal data in databases at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        gdprRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        gdprRdsEncryption.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsEncryption.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsEncryption = managedConfigRule("GdprRdsEncryption", this.stackName + "-gdpr-rds-storage-encrypted",
+                "GDPR Art. 32(1)(a): Encrypt personal data in databases at rest",
+                "RDS_STORAGE_ENCRYPTED", gdprRdsCondition);
+        dependOnRecorder(gdprRdsEncryption, recorder);
 
         // Article 32(1)(b): Confidentiality
-        CfnConfigRule gdprRdsPublicAccess = CfnConfigRule.Builder.create(this, "GdprRdsPublicAccess")
-                .configRuleName(this.stackName + "-gdpr-rds-instance-public-access-check")
-                .description("GDPR Art. 32(1)(b): Ensure confidentiality of personal data systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        gdprRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        gdprRdsPublicAccess.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsPublicAccess.getNode().addDependency(recorder);
-        CfnConfigRule restrictedRdpCheck = CfnConfigRule.Builder.create(this, "GdprRestrictedRdp")
-                .configRuleName(this.stackName + "-gdpr-restricted-rdp")
-                .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_RESTRICTED_INCOMING_TRAFFIC)
-                        .build())
-                .build();
-        restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        restrictedRdpCheck.addOverride("Condition", gdprCondition.getLogicalId());
-        restrictedRdpCheck.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsPublicAccess = managedConfigRule("GdprRdsPublicAccess", this.stackName + "-gdpr-rds-instance-public-access-check",
+                "GDPR Art. 32(1)(b): Ensure confidentiality of personal data systems",
+                "RDS_INSTANCE_PUBLIC_ACCESS_CHECK", gdprRdsCondition);
+        dependOnRecorder(gdprRdsPublicAccess, recorder);
+        CfnConfigRule restrictedRdpCheck = managedConfigRule("GdprRestrictedRdp", this.stackName + "-gdpr-restricted-rdp",
+                "GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems",
+                ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_RESTRICTED_INCOMING_TRAFFIC, gdprCondition);
+        dependOnRecorder(restrictedRdpCheck, recorder);
 
         // Article 32(1)(c): Availability and Resilience
-        CfnConfigRule gdprRdsBackupEnabled = CfnConfigRule.Builder.create(this, "GdprRdsBackup")
-                .configRuleName(this.stackName + "-gdpr-db-instance-backup-enabled")
-                .description("GDPR Art. 32(1)(c): Ensure resilience through data backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        gdprRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsBackupEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsBackupEnabled.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsBackupEnabled = managedConfigRule("GdprRdsBackup", this.stackName + "-gdpr-db-instance-backup-enabled",
+                "GDPR Art. 32(1)(c): Ensure resilience through data backups",
+                "DB_INSTANCE_BACKUP_ENABLED", gdprRdsCondition);
+        dependOnRecorder(gdprRdsBackupEnabled, recorder);
 
         if (security == SecurityProfile.PRODUCTION) {
-            CfnConfigRule dynamodbAutoscalingEnabled = CfnConfigRule.Builder.create(this, "GdprDynamoDbAutoscaling")
-                    .configRuleName(this.stackName + "-gdpr-dynamodb-autoscaling-enabled")
-                    .description("GDPR Art. 32(1)(c): Ensure resilience and availability of systems")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("DYNAMODB_AUTOSCALING_ENABLED")
-                            .build())
-                    .build();
-            dynamodbAutoscalingEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            dynamodbAutoscalingEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-            dynamodbAutoscalingEnabled.getNode().addDependency(recorder);
+            CfnConfigRule dynamodbAutoscalingEnabled = managedConfigRule("GdprDynamoDbAutoscaling", this.stackName + "-gdpr-dynamodb-autoscaling-enabled",
+                    "GDPR Art. 32(1)(c): Ensure resilience and availability of systems",
+                    "DYNAMODB_AUTOSCALING_ENABLED", gdprCondition);
+            dependOnRecorder(dynamodbAutoscalingEnabled, recorder);
 
-            CfnConfigRule s3BucketReplicationEnabled = CfnConfigRule.Builder.create(this, "GdprS3Replication")
-                    .configRuleName(this.stackName + "-gdpr-s3-bucket-replication")
-                    .description("GDPR Art. 32(1)(c): Implement geographic redundancy")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("S3_BUCKET_REPLICATION_ENABLED")
-                            .build())
-                    .build();
-            s3BucketReplicationEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            s3BucketReplicationEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-            s3BucketReplicationEnabled.getNode().addDependency(recorder);
+            CfnConfigRule s3BucketReplicationEnabled = managedConfigRule("GdprS3Replication", this.stackName + "-gdpr-s3-bucket-replication",
+                    "GDPR Art. 32(1)(c): Implement geographic redundancy",
+                    "S3_BUCKET_REPLICATION_ENABLED", gdprCondition);
+            dependOnRecorder(s3BucketReplicationEnabled, recorder);
         }
 
         // Article 32(1)(d): Audit and Assessment Capabilities
-        CfnConfigRule gdprRdsLoggingEnabled = CfnConfigRule.Builder.create(this, "GdprRdsLogging")
-                .configRuleName(this.stackName + "-gdpr-rds-logging-enabled")
-                .description("GDPR Art. 32(1)(d): Implement processes for testing and assessing security")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        gdprRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsLoggingEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsLoggingEnabled.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsLoggingEnabled = managedConfigRule("GdprRdsLogging", this.stackName + "-gdpr-rds-logging-enabled",
+                "GDPR Art. 32(1)(d): Implement processes for testing and assessing security",
+                "RDS_LOGGING_ENABLED", gdprRdsCondition);
+        dependOnRecorder(gdprRdsLoggingEnabled, recorder);
 
         // Article 32(1)(a): Security of Processing - Automated Updates
-        CfnConfigRule gdprRdsAutoUpgrade = CfnConfigRule.Builder.create(this, "GdprRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-gdpr-rds-automatic-minor-version-upgrade")
-                .description("GDPR Art. 32(1)(a): Maintain security through automated system updates")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        gdprRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        gdprRdsAutoUpgrade.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsAutoUpgrade.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsAutoUpgrade = managedConfigRule("GdprRdsAutoUpgrade", this.stackName + "-gdpr-rds-automatic-minor-version-upgrade",
+                "GDPR Art. 32(1)(a): Maintain security through automated system updates",
+                "RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED", gdprRdsCondition);
+        dependOnRecorder(gdprRdsAutoUpgrade, recorder);
         createRdsAutoMinorVersionUpgradeRemediation(gdprRdsAutoUpgrade);
 
         // Article 32(1)(c): Availability and Resilience - Deletion Protection
-        CfnConfigRule gdprRdsDeletionProtection = CfnConfigRule.Builder.create(this, "GdprRdsDeletionProtection")
-                .configRuleName(this.stackName + "-gdpr-rds-deletion-protection-enabled")
-                .description("GDPR Art. 32(1)(c): Protect personal data from accidental destruction")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                        .build())
-                .build();
-        gdprRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        gdprRdsDeletionProtection.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        gdprRdsDeletionProtection.getNode().addDependency(recorder);
+        CfnConfigRule gdprRdsDeletionProtection = managedConfigRule("GdprRdsDeletionProtection", this.stackName + "-gdpr-rds-deletion-protection-enabled",
+                "GDPR Art. 32(1)(c): Protect personal data from accidental destruction",
+                "RDS_INSTANCE_DELETION_PROTECTION_ENABLED", gdprRdsCondition);
+        dependOnRecorder(gdprRdsDeletionProtection, recorder);
         createRdsDeletionProtectionRemediation(gdprRdsDeletionProtection);
 
         if (security == SecurityProfile.PRODUCTION) {
             // Article 32(1)(c): High Availability for Production Systems
-            CfnConfigRule gdprRdsMultiAz = CfnConfigRule.Builder.create(this, "GdprRdsMultiAz")
-                    .configRuleName(this.stackName + "-gdpr-rds-multi-az-support")
-                    .description("GDPR Art. 32(1)(c): Ensure ability to restore availability of personal data")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_MULTI_AZ_SUPPORT")
-                            .build())
-                    .build();
-            gdprRdsMultiAz.addOverride("DeletionPolicy", "Delete");
-            gdprRdsMultiAz.addOverride("Condition", gdprCondition.getLogicalId());
-            gdprRdsMultiAz.getNode().addDependency(recorder);
+            CfnConfigRule gdprRdsMultiAz = managedConfigRule("GdprRdsMultiAz", this.stackName + "-gdpr-rds-multi-az-support",
+                    "GDPR Art. 32(1)(c): Ensure ability to restore availability of personal data",
+                    "RDS_MULTI_AZ_SUPPORT", gdprCondition);
+            dependOnRecorder(gdprRdsMultiAz, recorder);
         }
 
         // Article 33: Breach Detection
-        CfnConfigRule guarddutyNonArchivedFindings = CfnConfigRule.Builder.create(this, "GdprGuardDutyFindings")
-                .configRuleName(this.stackName + "-gdpr-guardduty-non-archived-findings")
-                .description("GDPR Art. 33(1): Detect data breaches within 72 hours")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("GUARDDUTY_NON_ARCHIVED_FINDINGS")
-                        .build())
-                .build();
-        guarddutyNonArchivedFindings.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        guarddutyNonArchivedFindings.addOverride("Condition", gdprCondition.getLogicalId());
-        guarddutyNonArchivedFindings.getNode().addDependency(recorder);
+        CfnConfigRule guarddutyNonArchivedFindings = managedConfigRule("GdprGuardDutyFindings", this.stackName + "-gdpr-guardduty-non-archived-findings",
+                "GDPR Art. 33(1): Detect data breaches within 72 hours",
+                "GUARDDUTY_NON_ARCHIVED_FINDINGS", gdprCondition);
+        dependOnRecorder(guarddutyNonArchivedFindings, recorder);
 
         LOG.info("Created " + (security == SecurityProfile.PRODUCTION ? "11" : "9") + " GDPR Config rules with conditional deployment");
-    }
-
-    /**
-     * Creates PCI-DSS Config rules WITHOUT recorder dependency.
-     * Rules will reference existing recorder by name at runtime.
-     */
-    private void createPciDssConfigRulesWithoutRecorder() {
-        LOG.info("Creating PCI-DSS AWS Config rules (condition-controlled, no recorder dependency)");
-
-        // Requirement 1: Network Segmentation
-        CfnConfigRule vpcDefaultSecurityGroupClosed = CfnConfigRule.Builder.create(this, "PciDssVpcDefaultSecurityGroupClosed")
-                .configRuleName(this.stackName + "-pci-dss-vpc-default-sg-closed")
-                .description("PCI-DSS Req 1.3: Prohibit direct public access between internet and cardholder data")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("VPC_DEFAULT_SECURITY_GROUP_CLOSED")
-                        .build())
-                .build();
-        vpcDefaultSecurityGroupClosed.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        vpcDefaultSecurityGroupClosed.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 2: Secure Configuration
-        CfnConfigRule ec2InstanceManagedBySsm = CfnConfigRule.Builder.create(this, "PciDssEc2ManagedBySsm")
-                .configRuleName(this.stackName + "-pci-dss-ec2-managed-by-ssm")
-                .description("PCI-DSS Req 2: Secure system configuration management")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_INSTANCE_MANAGED_BY_SSM)
-                        .build())
-                .build();
-        ec2InstanceManagedBySsm.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        ec2InstanceManagedBySsm.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 3: Protect stored cardholder data
-        CfnConfigRule rdsEncryptionEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsEncryption")
-                .configRuleName(this.stackName + "-pci-dss-rds-encryption-enabled")
-                .description("PCI-DSS Req 3.4: Render cardholder data unreadable with encryption")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        rdsEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsEncryptionEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-
-        CfnConfigRule rdsPublicAccessCheck = CfnConfigRule.Builder.create(this, "PciDssRdsPublicAccess")
-                .configRuleName(this.stackName + "-pci-dss-rds-instance-public-access-check")
-                .description("PCI-DSS Req 1.3.1: Prohibit direct public access between internet and cardholder data")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        rdsPublicAccessCheck.addOverride("DeletionPolicy", "Delete");
-        rdsPublicAccessCheck.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-
-        CfnConfigRule rdsBackupEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsBackup")
-                .configRuleName(this.stackName + "-pci-dss-db-instance-backup-enabled")
-                .description("PCI-DSS Req 3.4: Protect stored cardholder data with backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        rdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsBackupEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-
-        CfnConfigRule rdsAutoUpgrade = CfnConfigRule.Builder.create(this, "PciDssRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-pci-dss-rds-automatic-minor-version-upgrade")
-                .description("PCI-DSS Req 6.2: Ensure all system components are protected with security patches")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        rdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        rdsAutoUpgrade.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-        createRdsAutoMinorVersionUpgradeRemediation(rdsAutoUpgrade);
-
-        CfnConfigRule rdsLoggingEnabled = CfnConfigRule.Builder.create(this, "PciDssRdsLogging")
-                .configRuleName(this.stackName + "-pci-dss-rds-logging-enabled")
-                .description("PCI-DSS Req 10.2: Implement automated audit trails for all system components")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        rdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        rdsLoggingEnabled.addOverride("Condition", pciDssRdsCondition.getLogicalId());
-
-        // Requirement 4: Encrypt transmission
-        CfnConfigRule elbTlsHttpsListenersOnly = CfnConfigRule.Builder.create(this, "PciDssElbTlsOnly")
-                .configRuleName(this.stackName + "-pci-dss-elb-tls-https-only")
-                .description("PCI-DSS Req 4.1: Use strong cryptography for transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ELB_TLS_HTTPS_LISTENERS_ONLY")
-                        .build())
-                .build();
-        elbTlsHttpsListenersOnly.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        elbTlsHttpsListenersOnly.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 7: Restrict access by business need to know
-        CfnConfigRule iamPolicyNoStatementsWithAdminAccess = CfnConfigRule.Builder.create(this, "PciDssIamNoAdminPolicy")
-                .configRuleName(this.stackName + "-pci-dss-iam-no-admin-policy")
-                .description("PCI-DSS Req 7.1: Limit access to system components by business need-to-know")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_POLICY_NO_STATEMENTS_WITH_ADMIN_ACCESS")
-                        .build())
-                .build();
-        iamPolicyNoStatementsWithAdminAccess.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamPolicyNoStatementsWithAdminAccess.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 8: Identify and authenticate access
-        CfnConfigRule iamUserMfaEnabled = CfnConfigRule.Builder.create(this, "PciDssIamMfaEnabled")
-                .configRuleName(this.stackName + "-pci-dss-iam-user-mfa-enabled")
-                .description("PCI-DSS Req 8.3: Multi-factor authentication for remote access")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_MFA_ENABLED")
-                        .build())
-                .build();
-        iamUserMfaEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserMfaEnabled.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 10: Track and monitor access
-        Map<String, Object> alarmActionParams = Map.of(
-                "alarmActionRequired", "true",
-                "insufficientDataActionRequired", "false",
-                "okActionRequired", "false"
-        );
-        CfnConfigRule cloudwatchAlarmActionCheck = CfnConfigRule.Builder.create(this, "PciDssCloudWatchAlarmAction")
-                .configRuleName(this.stackName + "-pci-dss-cloudwatch-alarm-action")
-                .description("PCI-DSS Req 10.6: Review logs daily for suspicious activity")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUDWATCH_ALARM_ACTION_CHECK")
-                        .build())
-                .inputParameters(alarmActionParams)
-                .build();
-        cloudwatchAlarmActionCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudwatchAlarmActionCheck.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Requirement 11: Test security systems
-        CfnConfigRule guardDutyEnabledCentralized = CfnConfigRule.Builder.create(this, "PciDssGuardDutyEnabled")
-                .configRuleName(this.stackName + "-pci-dss-guardduty-enabled")
-                .description("PCI-DSS Req 11.4: Use intrusion detection systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("GUARDDUTY_ENABLED_CENTRALIZED")
-                        .build())
-                .build();
-        guardDutyEnabledCentralized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        guardDutyEnabledCentralized.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        // Automatic remediation: enables GuardDuty if not already enabled (PRODUCTION only by default)
-        if (Boolean.TRUE.equals(enableGuardDutyRemediation) ||
-            (enableGuardDutyRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
-            createGuardDutyRemediation(guardDutyEnabledCentralized);
-        }
-
-        LOG.info("Created 12 PCI-DSS Config rules (no recorder dependency)");
-    }
-
-    /**
-     * Creates SOC2 Config rules WITHOUT recorder dependency.
-     */
-    private void createSoc2ConfigRulesWithoutRecorder() {
-        LOG.info("Creating SOC 2 AWS Config rules (condition-controlled, no recorder dependency)");
-
-        // CC6.1: Logical Access Controls
-        CfnConfigRule iamUserNoPolicies = CfnConfigRule.Builder.create(this, "Soc2IamUserNoPolicies")
-                .configRuleName(this.stackName + "-soc2-iam-user-no-policies")
-                .description("SOC 2 CC6.1: Implement role-based access control")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_NO_POLICIES_CHECK")
-                        .build())
-                .build();
-        iamUserNoPolicies.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserNoPolicies.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // CC6.6: Network Segmentation
-        CfnConfigRule restrictedSshCheck = CfnConfigRule.Builder.create(this, "Soc2RestrictedSsh")
-                .configRuleName(this.stackName + "-soc2-restricted-ssh")
-                .description("SOC 2 CC6.6: Network segmentation and access control")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_INCOMING_SSH_DISABLED)
-                        .build())
-                .build();
-        restrictedSshCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        restrictedSshCheck.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // CC6.7: Transmission Encryption
-        CfnConfigRule albHttpToHttpsRedirection = CfnConfigRule.Builder.create(this, "Soc2AlbHttpsRedirection")
-                .configRuleName(this.stackName + "-soc2-alb-https-redirection")
-                .description("SOC 2 CC6.7: Encrypt data in transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ALB_HTTP_TO_HTTPS_REDIRECTION_CHECK")
-                        .build())
-                .build();
-        albHttpToHttpsRedirection.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        albHttpToHttpsRedirection.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // CC7.2: System Monitoring
-        CfnConfigRule securityHubEnabled = CfnConfigRule.Builder.create(this, "Soc2SecurityHubEnabled")
-                .configRuleName(this.stackName + "-soc2-security-hub-enabled")
-                .description("SOC 2 CC7.2: Monitor system components for anomalies")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("SECURITYHUB_ENABLED")
-                        .build())
-                .build();
-        securityHubEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        securityHubEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // Automatic remediation: enables Security Hub if not already enabled (PRODUCTION only by default)
-        if (Boolean.TRUE.equals(enableSecurityHubRemediation) ||
-            (enableSecurityHubRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
-            createSecurityHubRemediation(securityHubEnabled);
-        }
-
-        // CC7.2: Vulnerability Scanning
-        CfnConfigRule inspectorEnabled = CfnConfigRule.Builder.create(this, "Soc2InspectorEnabled")
-                .configRuleName(this.stackName + "-soc2-inspector-enabled")
-                .description("SOC 2 CC7.2: Continuous vulnerability scanning")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("INSPECTOR_EC2_SCAN_ENABLED")
-                        .build())
-                .build();
-        inspectorEnabled.addOverride("DeletionPolicy", "Delete");
-        inspectorEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // Automatic remediation: enables Inspector if not already enabled (PRODUCTION only by default)
-        if (Boolean.TRUE.equals(enableInspectorRemediation) ||
-            (enableInspectorRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
-            createInspectorRemediation(inspectorEnabled);
-        }
-
-        // CC7.2: Sensitive Data Protection
-        CfnConfigRule macieEnabled = CfnConfigRule.Builder.create(this, "Soc2MacieEnabled")
-                .configRuleName(this.stackName + "-soc2-macie-enabled")
-                .description("SOC 2 CC7.2: Sensitive data discovery and protection")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("MACIE_STATUS_CHECK")
-                        .build())
-                .build();
-        macieEnabled.addOverride("DeletionPolicy", "Delete");
-        macieEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // Automatic remediation: enables Macie if not already enabled (PRODUCTION only by default)
-        if (Boolean.TRUE.equals(enableMacieRemediation) ||
-            (enableMacieRemediation == null && ctx.security == SecurityProfile.PRODUCTION)) {
-            createMacieRemediation(macieEnabled);
-        }
-
-        // CC8.1: Change Management
-        CfnConfigRule cloudtrailS3DataEventsEnabled = CfnConfigRule.Builder.create(this, "Soc2CloudTrailS3DataEvents")
-                .configRuleName(this.stackName + "-soc2-cloudtrail-s3-data-events")
-                .description("SOC 2 CC8.1: Track and authorize infrastructure changes")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUDTRAIL_S3_DATAEVENTS_ENABLED")
-                        .build())
-                .build();
-        cloudtrailS3DataEventsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailS3DataEventsEnabled.addOverride("Condition", soc2Condition.getLogicalId());
-
-        // A1.2: High Availability (for production)
-        // A1.3: Data Backup
-        CfnConfigRule soc2RdsBackupEnabled = CfnConfigRule.Builder.create(this, "Soc2RdsBackup")
-                .configRuleName(this.stackName + "-soc2-db-instance-backup-enabled")
-                .description("SOC 2 A1.3: Implement data backup procedures")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        soc2RdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        soc2RdsBackupEnabled.addOverride("Condition", soc2RdsCondition.getLogicalId());
-
-        // CC6.1: Logical Access Security Controls
-        CfnConfigRule soc2RdsPublicAccess = CfnConfigRule.Builder.create(this, "Soc2RdsPublicAccess")
-                .configRuleName(this.stackName + "-soc2-rds-instance-public-access-check")
-                .description("SOC 2 CC6.1: Restrict logical access to databases")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        soc2RdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        soc2RdsPublicAccess.addOverride("Condition", soc2RdsCondition.getLogicalId());
-
-        // CC6.1: Encryption Controls
-        CfnConfigRule soc2RdsEncryption = CfnConfigRule.Builder.create(this, "Soc2RdsEncryption")
-                .configRuleName(this.stackName + "-soc2-rds-storage-encrypted")
-                .description("SOC 2 CC6.1: Encrypt data at rest to protect logical access")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        soc2RdsEncryption.addOverride("DeletionPolicy", "Delete");
-        soc2RdsEncryption.addOverride("Condition", soc2RdsCondition.getLogicalId());
-
-        // CC7.2: System Monitoring
-        CfnConfigRule soc2RdsLogging = CfnConfigRule.Builder.create(this, "Soc2RdsLogging")
-                .configRuleName(this.stackName + "-soc2-rds-logging-enabled")
-                .description("SOC 2 CC7.2: Enable logging to monitor and detect system anomalies")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        soc2RdsLogging.addOverride("DeletionPolicy", "Delete");
-        soc2RdsLogging.addOverride("Condition", soc2RdsCondition.getLogicalId());
-
-        // CC7.1: System Operations
-        CfnConfigRule soc2RdsAutoUpgrade = CfnConfigRule.Builder.create(this, "Soc2RdsAutoUpgrade")
-                .configRuleName(this.stackName + "-soc2-rds-automatic-minor-version-upgrade")
-                .description("SOC 2 CC7.1: Ensure systems are updated with security patches")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        soc2RdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        soc2RdsAutoUpgrade.addOverride("Condition", soc2RdsCondition.getLogicalId());
-        createRdsAutoMinorVersionUpgradeRemediation(soc2RdsAutoUpgrade);
-
-        if (security == SecurityProfile.PRODUCTION) {
-            CfnConfigRule rdsMultiAz = CfnConfigRule.Builder.create(this, "Soc2RdsMultiAz")
-                    .configRuleName(this.stackName + "-soc2-rds-multi-az-support")
-                    .description("SOC 2 A1.2: Deploy across multiple availability zones")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_MULTI_AZ_SUPPORT")
-                            .build())
-                    .build();
-            rdsMultiAz.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            rdsMultiAz.addOverride("Condition", soc2RdsCondition.getLogicalId());
-
-            CfnConfigRule soc2RdsDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2RdsDeletionProtection")
-                    .configRuleName(this.stackName + "-soc2-rds-deletion-protection-enabled")
-                    .description("SOC 2 A1.2: Protect critical databases from accidental deletion")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                            .build())
-                    .build();
-            soc2RdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-            soc2RdsDeletionProtection.addOverride("Condition", soc2RdsCondition.getLogicalId());
-            createRdsDeletionProtectionRemediation(soc2RdsDeletionProtection);
-
-            CfnConfigRule soc2RdsEnhancedMonitoring = CfnConfigRule.Builder.create(this, "Soc2RdsEnhancedMonitoring")
-                    .configRuleName(this.stackName + "-soc2-rds-enhanced-monitoring-enabled")
-                    .description("SOC 2 CC7.2: Monitor system components and detect anomalies")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_ENHANCED_MONITORING_ENABLED")
-                            .build())
-                    .build();
-            soc2RdsEnhancedMonitoring.addOverride("DeletionPolicy", "Delete");
-            soc2RdsEnhancedMonitoring.addOverride("Condition", soc2Condition.getLogicalId());
-
-            CfnConfigRule elbDeletionProtection = CfnConfigRule.Builder.create(this, "Soc2ElbDeletionProtection")
-                    .configRuleName(this.stackName + "-soc2-elb-deletion-protection")
-                    .description("SOC 2 A1.2: Protect critical components from accidental deletion")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("ELB_DELETION_PROTECTION_ENABLED")
-                            .build())
-                    .build();
-            elbDeletionProtection.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            elbDeletionProtection.addOverride("Condition", soc2Condition.getLogicalId());
-        }
-
-        LOG.info("Created " + (security == SecurityProfile.PRODUCTION ? "16" : "12") + " SOC 2 Config rules (no recorder dependency)");
-    }
-
-    /**
-     * Creates HIPAA Config rules WITHOUT recorder dependency.
-     */
-    private void createHipaaConfigRulesWithoutRecorder() {
-        LOG.info("Creating HIPAA AWS Config rules (condition-controlled, no recorder dependency)");
-
-        // §164.308(a)(1): Security Management Process
-        CfnConfigRule cloudtrailCloudwatchLogsEnabled = CfnConfigRule.Builder.create(this, "HipaaCloudTrailCloudWatchLogs")
-                .configRuleName(this.stackName + "-hipaa-cloudtrail-cloudwatch-logs")
-                .description("HIPAA §164.308(a)(1)(ii)(D): Information system activity review")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUD_TRAIL_CLOUD_WATCH_LOGS_ENABLED")
-                        .build())
-                .build();
-        cloudtrailCloudwatchLogsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailCloudwatchLogsEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        // §164.308(a)(3): Workforce Security
-        CfnConfigRule iamUserGroupMembershipCheck = CfnConfigRule.Builder.create(this, "HipaaIamGroupMembership")
-                .configRuleName(this.stackName + "-hipaa-iam-group-membership")
-                .description("HIPAA §164.308(a)(3): Implement procedures for workforce clearance")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("IAM_USER_GROUP_MEMBERSHIP_CHECK")
-                        .build())
-                .build();
-        iamUserGroupMembershipCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        iamUserGroupMembershipCheck.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        // §164.310(d): Device and Media Controls (Backup)
-        CfnConfigRule dynamodbPitrEnabled = CfnConfigRule.Builder.create(this, "HipaaDynamoDbPitr")
-                .configRuleName(this.stackName + "-hipaa-dynamodb-pitr-enabled")
-                .description("HIPAA §164.310(d)(2)(iv): Create backup copies of ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DYNAMODB_PITR_ENABLED")
-                        .build())
-                .build();
-        dynamodbPitrEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        dynamodbPitrEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        CfnConfigRule rdsSnapshotEncrypted = CfnConfigRule.Builder.create(this, "HipaaRdsSnapshotEncrypted")
-                .configRuleName(this.stackName + "-hipaa-rds-snapshot-encrypted")
-                .description("HIPAA §164.312(a)(2)(iv): Encrypt ePHI backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_SNAPSHOT_ENCRYPTED")
-                        .build())
-                .build();
-        rdsSnapshotEncrypted.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rdsSnapshotEncrypted.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-
-        CfnConfigRule hipaaRdsEncryption = CfnConfigRule.Builder.create(this, "HipaaRdsEncryption")
-                .configRuleName(this.stackName + "-hipaa-rds-storage-encrypted")
-                .description("HIPAA §164.312(a)(2)(iv): Encrypt ePHI at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        hipaaRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsEncryption.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-
-        CfnConfigRule hipaaRdsPublicAccess = CfnConfigRule.Builder.create(this, "HipaaRdsPublicAccess")
-                .configRuleName(this.stackName + "-hipaa-rds-instance-public-access-check")
-                .description("HIPAA §164.308(a)(4)(ii)(B): Implement access management controls")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        hipaaRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsPublicAccess.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-
-        CfnConfigRule hipaaRdsBackupEnabled = CfnConfigRule.Builder.create(this, "HipaaRdsBackup")
-                .configRuleName(this.stackName + "-hipaa-db-instance-backup-enabled")
-                .description("HIPAA §164.310(d)(2)(iii): Create retrievable backup copies of ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsBackupEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-
-        CfnConfigRule hipaaRdsAutoUpgrade = CfnConfigRule.Builder.create(this, "HipaaRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-hipaa-rds-automatic-minor-version-upgrade")
-                .description("HIPAA §164.308(a)(5)(ii)(B): Install security patches and updates")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsAutoUpgrade.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        createRdsAutoMinorVersionUpgradeRemediation(hipaaRdsAutoUpgrade);
-
-        CfnConfigRule hipaaRdsLoggingEnabled = CfnConfigRule.Builder.create(this, "HipaaRdsLogging")
-                .configRuleName(this.stackName + "-hipaa-rds-logging-enabled")
-                .description("HIPAA §164.312(b): Implement hardware/software audit controls")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsLoggingEnabled.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-
-        CfnConfigRule hipaaRdsDeletionProtection = CfnConfigRule.Builder.create(this, "HipaaRdsDeletionProtection")
-                .configRuleName(this.stackName + "-hipaa-rds-deletion-protection-enabled")
-                .description("HIPAA §164.308(a)(7)(ii)(A): Establish data backup contingency plan")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                        .build())
-                .build();
-        hipaaRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        hipaaRdsDeletionProtection.addOverride("Condition", hipaaRdsCondition.getLogicalId());
-        createRdsDeletionProtectionRemediation(hipaaRdsDeletionProtection);
-
-        // §164.312(a)(1): Access Control
-        CfnConfigRule rootAccountMfaEnabled = CfnConfigRule.Builder.create(this, "HipaaRootMfaEnabled")
-                .configRuleName(this.stackName + "-hipaa-root-account-mfa-enabled")
-                .description("HIPAA §164.312(a)(2)(i): Assign unique user identification")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ROOT_ACCOUNT_MFA_ENABLED")
-                        .build())
-                .build();
-        rootAccountMfaEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        rootAccountMfaEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        // §164.312(b): Audit Controls
-        CfnConfigRule albWafEnabled = CfnConfigRule.Builder.create(this, "HipaaAlbWafEnabled")
-                .configRuleName(this.stackName + "-hipaa-alb-waf-enabled")
-                .description("HIPAA §164.312(b): Record and examine activity in systems with ePHI")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ALB_WAF_ENABLED")
-                        .build())
-                .build();
-        albWafEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        albWafEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        // §164.312(c)(1): Integrity Controls
-        CfnConfigRule cloudtrailEncryptionEnabled = CfnConfigRule.Builder.create(this, "HipaaCloudTrailEncryption")
-                .configRuleName(this.stackName + "-hipaa-cloudtrail-encryption-enabled")
-                .description("HIPAA §164.312(c)(2): Authenticate ePHI integrity")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CLOUD_TRAIL_ENCRYPTION_ENABLED")
-                        .build())
-                .build();
-        cloudtrailEncryptionEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        cloudtrailEncryptionEnabled.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        // §164.312(e)(1): Transmission Security
-        CfnConfigRule elbAcmCertificateRequired = CfnConfigRule.Builder.create(this, "HipaaElbAcmCertificate")
-                .configRuleName(this.stackName + "-hipaa-elb-acm-certificate-required")
-                .description("HIPAA §164.312(e)(2)(ii): Encrypt ePHI during transmission")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("ELB_ACM_CERTIFICATE_REQUIRED")
-                        .build())
-                .build();
-        elbAcmCertificateRequired.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        elbAcmCertificateRequired.addOverride("Condition", hipaaCondition.getLogicalId());
-
-        LOG.info("Created 14 HIPAA Config rules (no recorder dependency)");
-    }
-
-    /**
-     * Creates GDPR Config rules WITHOUT recorder dependency.
-     */
-    private void createGdprConfigRulesWithoutRecorder() {
-        LOG.info("Creating GDPR AWS Config rules (condition-controlled, no recorder dependency)");
-
-        // Article 25: Data Protection by Design
-        CfnConfigRule ec2EbsOptimized = CfnConfigRule.Builder.create(this, "GdprEc2EbsOptimized")
-                .configRuleName(this.stackName + "-gdpr-ec2-ebs-optimized")
-                .description("GDPR Art. 25: Data protection by design - optimize storage security")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EBS_OPTIMIZED_INSTANCE)
-                        .build())
-                .build();
-        ec2EbsOptimized.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        ec2EbsOptimized.addOverride("Condition", gdprCondition.getLogicalId());
-
-        // Article 30: Records of Processing Activities
-        CfnConfigRule vpcFlowLogsEnabled = CfnConfigRule.Builder.create(this, "GdprVpcFlowLogs")
-                .configRuleName(this.stackName + "-gdpr-vpc-flow-logs-enabled")
-                .description("GDPR Art. 30(1): Maintain records of processing activities")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("VPC_FLOW_LOGS_ENABLED")
-                        .build())
-                .build();
-        vpcFlowLogsEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        vpcFlowLogsEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-
-        // Article 32(1)(a): Pseudonymisation and Encryption
-        CfnConfigRule s3DefaultEncryptionKms = CfnConfigRule.Builder.create(this, "GdprS3DefaultEncryptionKms")
-                .configRuleName(this.stackName + "-gdpr-s3-default-encryption-kms")
-                .description("GDPR Art. 32(1)(a): Encrypt personal data at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("S3_DEFAULT_ENCRYPTION_KMS")
-                        .build())
-                .build();
-        s3DefaultEncryptionKms.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        s3DefaultEncryptionKms.addOverride("Condition", gdprCondition.getLogicalId());
-
-        CfnConfigRule kmsBackingKeyRotationEnabled = CfnConfigRule.Builder.create(this, "GdprKmsKeyRotation")
-                .configRuleName(this.stackName + "-gdpr-kms-backing-key-rotation")
-                .description("GDPR Art. 32(1)(a): Rotate encryption keys regularly")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("CMK_BACKING_KEY_ROTATION_ENABLED")
-                        .build())
-                .build();
-        kmsBackingKeyRotationEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        kmsBackingKeyRotationEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-
-        CfnConfigRule gdprRdsEncryption = CfnConfigRule.Builder.create(this, "GdprRdsEncryption")
-                .configRuleName(this.stackName + "-gdpr-rds-storage-encrypted")
-                .description("GDPR Art. 32(1)(a): Encrypt personal data in databases at rest")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_STORAGE_ENCRYPTED")
-                        .build())
-                .build();
-        gdprRdsEncryption.addOverride("DeletionPolicy", "Delete");
-        gdprRdsEncryption.addOverride("Condition", gdprRdsCondition.getLogicalId());
-
-        // Article 32(1)(b): Confidentiality
-        CfnConfigRule gdprRdsPublicAccess = CfnConfigRule.Builder.create(this, "GdprRdsPublicAccess")
-                .configRuleName(this.stackName + "-gdpr-rds-instance-public-access-check")
-                .description("GDPR Art. 32(1)(b): Ensure confidentiality of personal data systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_PUBLIC_ACCESS_CHECK")
-                        .build())
-                .build();
-        gdprRdsPublicAccess.addOverride("DeletionPolicy", "Delete");
-        gdprRdsPublicAccess.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        CfnConfigRule restrictedRdpCheck = CfnConfigRule.Builder.create(this, "GdprRestrictedRdp")
-                .configRuleName(this.stackName + "-gdpr-restricted-rdp")
-                .description("GDPR Art. 32(1)(b): Ensure ongoing confidentiality of systems")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier(ManagedRuleIdentifiers.EC2_SECURITY_GROUPS_RESTRICTED_INCOMING_TRAFFIC)
-                        .build())
-                .build();
-        restrictedRdpCheck.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        restrictedRdpCheck.addOverride("Condition", gdprCondition.getLogicalId());
-
-        // Article 32(1)(c): Availability and Resilience
-        CfnConfigRule gdprRdsBackupEnabled = CfnConfigRule.Builder.create(this, "GdprRdsBackup")
-                .configRuleName(this.stackName + "-gdpr-db-instance-backup-enabled")
-                .description("GDPR Art. 32(1)(c): Ensure resilience through data backups")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("DB_INSTANCE_BACKUP_ENABLED")
-                        .build())
-                .build();
-        gdprRdsBackupEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsBackupEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
-
-        if (security == SecurityProfile.PRODUCTION) {
-            CfnConfigRule dynamodbAutoscalingEnabled = CfnConfigRule.Builder.create(this, "GdprDynamoDbAutoscaling")
-                    .configRuleName(this.stackName + "-gdpr-dynamodb-autoscaling-enabled")
-                    .description("GDPR Art. 32(1)(c): Ensure resilience and availability of systems")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("DYNAMODB_AUTOSCALING_ENABLED")
-                            .build())
-                    .build();
-            dynamodbAutoscalingEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            dynamodbAutoscalingEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-
-            CfnConfigRule s3BucketReplicationEnabled = CfnConfigRule.Builder.create(this, "GdprS3Replication")
-                    .configRuleName(this.stackName + "-gdpr-s3-bucket-replication")
-                    .description("GDPR Art. 32(1)(c): Implement geographic redundancy")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("S3_BUCKET_REPLICATION_ENABLED")
-                            .build())
-                    .build();
-            s3BucketReplicationEnabled.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-            s3BucketReplicationEnabled.addOverride("Condition", gdprCondition.getLogicalId());
-        }
-
-        // Article 32(1)(d): Audit and Assessment Capabilities
-        CfnConfigRule gdprRdsLoggingEnabled = CfnConfigRule.Builder.create(this, "GdprRdsLogging")
-                .configRuleName(this.stackName + "-gdpr-rds-logging-enabled")
-                .description("GDPR Art. 32(1)(d): Implement processes for testing and assessing security")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_LOGGING_ENABLED")
-                        .build())
-                .build();
-        gdprRdsLoggingEnabled.addOverride("DeletionPolicy", "Delete");
-        gdprRdsLoggingEnabled.addOverride("Condition", gdprRdsCondition.getLogicalId());
-
-        // Article 32(1)(a): Security of Processing - Automated Updates
-        CfnConfigRule gdprRdsAutoUpgrade = CfnConfigRule.Builder.create(this, "GdprRdsAutoUpgrade")
-                .configRuleName(this.stackName + "-gdpr-rds-automatic-minor-version-upgrade")
-                .description("GDPR Art. 32(1)(a): Maintain security through automated system updates")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_AUTOMATIC_MINOR_VERSION_UPGRADE_ENABLED")
-                        .build())
-                .build();
-        gdprRdsAutoUpgrade.addOverride("DeletionPolicy", "Delete");
-        gdprRdsAutoUpgrade.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        createRdsAutoMinorVersionUpgradeRemediation(gdprRdsAutoUpgrade);
-
-        // Article 32(1)(c): Availability and Resilience - Deletion Protection
-        CfnConfigRule gdprRdsDeletionProtection = CfnConfigRule.Builder.create(this, "GdprRdsDeletionProtection")
-                .configRuleName(this.stackName + "-gdpr-rds-deletion-protection-enabled")
-                .description("GDPR Art. 32(1)(c): Protect personal data from accidental destruction")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("RDS_INSTANCE_DELETION_PROTECTION_ENABLED")
-                        .build())
-                .build();
-        gdprRdsDeletionProtection.addOverride("DeletionPolicy", "Delete");
-        gdprRdsDeletionProtection.addOverride("Condition", gdprRdsCondition.getLogicalId());
-        createRdsDeletionProtectionRemediation(gdprRdsDeletionProtection);
-
-        if (security == SecurityProfile.PRODUCTION) {
-            // Article 32(1)(c): High Availability for Production Systems
-            CfnConfigRule gdprRdsMultiAz = CfnConfigRule.Builder.create(this, "GdprRdsMultiAz")
-                    .configRuleName(this.stackName + "-gdpr-rds-multi-az-support")
-                    .description("GDPR Art. 32(1)(c): Ensure ability to restore availability of personal data")
-                    .source(CfnConfigRule.SourceProperty.builder()
-                            .owner("AWS")
-                            .sourceIdentifier("RDS_MULTI_AZ_SUPPORT")
-                            .build())
-                    .build();
-            gdprRdsMultiAz.addOverride("DeletionPolicy", "Delete");
-            gdprRdsMultiAz.addOverride("Condition", gdprCondition.getLogicalId());
-        }
-
-        // Article 33: Breach Detection
-        CfnConfigRule guarddutyNonArchivedFindings = CfnConfigRule.Builder.create(this, "GdprGuardDutyFindings")
-                .configRuleName(this.stackName + "-gdpr-guardduty-non-archived-findings")
-                .description("GDPR Art. 33(1): Detect data breaches within 72 hours")
-                .source(CfnConfigRule.SourceProperty.builder()
-                        .owner("AWS")
-                        .sourceIdentifier("GUARDDUTY_NON_ARCHIVED_FINDINGS")
-                        .build())
-                .build();
-        guarddutyNonArchivedFindings.addOverride("DeletionPolicy", "Delete");  // Ensure Config rules are deleted with stack
-        guarddutyNonArchivedFindings.addOverride("Condition", gdprCondition.getLogicalId());
-
-        LOG.info("Created " + (security == SecurityProfile.PRODUCTION ? "15" : "12") + " GDPR Config rules (no recorder dependency)");
     }
 
     /**
@@ -3889,12 +2580,10 @@ public class ComplianceFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             auditManagerRole,
             List.of(
-                NagPackSuppression.builder()
-                    .id("AwsSolutions-IAM5")
-                    .reason("S3 bucket object access requires /* pattern for write operations. " +
+                NagSuppress.of("AwsSolutions-IAM5",
+                    "S3 bucket object access requires /* pattern for write operations. " +
                            "Service read APIs (AuditManager, CloudTrail, Config, SecurityHub, IAM, EC2) " +
                            "require * for account-wide read-only operations - AWS service requirements.")
-                    .build()
             ),
             Boolean.TRUE  // Apply to all policies
         );
@@ -4016,57 +2705,9 @@ public class ComplianceFactory extends BaseFactory {
                                         .id(accountId)
                                         .build()
                         ))
-                        .awsServices(List.of(
-                                // Core AWS services for evidence collection
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS Config")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS CloudTrail")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon CloudWatch")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS Security Hub")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon GuardDuty")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS IAM")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon VPC")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon EC2")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon ECS")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon EFS")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon S3")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS KMS")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS Secrets Manager")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Amazon Route53")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("AWS Certificate Manager")
-                                        .build(),
-                                CfnAssessment.AWSServiceProperty.builder()
-                                        .serviceName("Elastic Load Balancing")
-                                        .build()
-                        ))
+                        .awsServices(ASSESSMENT_SERVICES.stream()
+                                .map(name -> CfnAssessment.AWSServiceProperty.builder().serviceName(name).build())
+                                .toList())
                         .build())
                 .tags(List.of(
                         software.amazon.awscdk.CfnTag.builder()
@@ -4270,6 +2911,41 @@ public class ComplianceFactory extends BaseFactory {
         return controlSets;
     }
 
+    /** AWS services an Audit Manager assessment collects evidence from. */
+    private static final List<String> ASSESSMENT_SERVICES = List.of(
+        "AWS Config",
+        "AWS CloudTrail",
+        "Amazon CloudWatch",
+        "AWS Security Hub",
+        "Amazon GuardDuty",
+        "AWS IAM",
+        "Amazon VPC",
+        "Amazon EC2",
+        "Amazon ECS",
+        "Amazon EFS",
+        "Amazon S3",
+        "AWS KMS",
+        "AWS Secrets Manager",
+        "Amazon Route53",
+        "AWS Certificate Manager",
+        "Elastic Load Balancing"
+    );
+
+    /** How an Audit Manager evidence source maps to a data source. */
+    private record EvidenceSourceMapping(String namePrefix, String description, String sourceType) {}
+
+    private static final Map<String, EvidenceSourceMapping> EVIDENCE_SOURCES = Map.ofEntries(
+        Map.entry("cloudtrail", new EvidenceSourceMapping("CloudTrail", "CloudTrail API activity logs", "AWS_Cloudtrail")),
+        Map.entry("securityhub", new EvidenceSourceMapping("SecurityHub", "Security Hub findings", "AWS_Security_Hub")),
+        Map.entry("guardduty", new EvidenceSourceMapping("GuardDuty", "GuardDuty threat detections", "AWS_API_Call")),
+        Map.entry("vpc-flowlogs", new EvidenceSourceMapping("VPCFlowLogs", "VPC network traffic logs", "AWS_Cloudtrail")),
+        Map.entry("cloudwatch", new EvidenceSourceMapping("CloudWatch", "CloudWatch metrics and logs", "AWS_API_Call")),
+        Map.entry("cloudwatch-logs", new EvidenceSourceMapping("CloudWatch", "CloudWatch metrics and logs", "AWS_API_Call")),
+        Map.entry("s3", new EvidenceSourceMapping("S3", "S3 access logs", "AWS_Cloudtrail")),
+        Map.entry("iam", new EvidenceSourceMapping("IAM", "IAM credential reports", "AWS_API_Call")),
+        Map.entry("waf", new EvidenceSourceMapping("WAF", "WAF web ACL logs", "AWS_Cloudtrail"))
+    );
+
     /**
      * Builds a CfnAssessment control property from AuditManagerControl.
      * Maps Config rules to control data sources for automated evidence collection.
@@ -4324,76 +3000,21 @@ public class ComplianceFactory extends BaseFactory {
                 continue;
             }
 
+            EvidenceSourceMapping mapping = EVIDENCE_SOURCES.get(evidenceSource.toLowerCase());
             Map<String, Object> dataSource = new java.util.LinkedHashMap<>();
-
-            // Map evidence source to AWS service with proper API structure
-            switch (evidenceSource.toLowerCase()) {
-                case "cloudtrail":
-                    dataSource.put("sourceName", "CloudTrail-" + control.controlId());
-                    dataSource.put("sourceDescription", "CloudTrail API activity logs");
-                    dataSource.put("sourceType", "AWS_Cloudtrail");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "securityhub":
-                    dataSource.put("sourceName", "SecurityHub-" + control.controlId());
-                    dataSource.put("sourceDescription", "Security Hub findings");
-                    dataSource.put("sourceType", "AWS_Security_Hub");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "guardduty":
-                    dataSource.put("sourceName", "GuardDuty-" + control.controlId());
-                    dataSource.put("sourceDescription", "GuardDuty threat detections");
-                    dataSource.put("sourceType", "AWS_API_Call");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "vpc-flowlogs":
-                    dataSource.put("sourceName", "VPCFlowLogs-" + control.controlId());
-                    dataSource.put("sourceDescription", "VPC network traffic logs");
-                    dataSource.put("sourceType", "AWS_Cloudtrail");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "cloudwatch":
-                case "cloudwatch-logs":
-                    dataSource.put("sourceName", "CloudWatch-" + control.controlId());
-                    dataSource.put("sourceDescription", "CloudWatch metrics and logs");
-                    dataSource.put("sourceType", "AWS_API_Call");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "s3":
-                    dataSource.put("sourceName", "S3-" + control.controlId());
-                    dataSource.put("sourceDescription", "S3 access logs");
-                    dataSource.put("sourceType", "AWS_Cloudtrail");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "iam":
-                    dataSource.put("sourceName", "IAM-" + control.controlId());
-                    dataSource.put("sourceDescription", "IAM credential reports");
-                    dataSource.put("sourceType", "AWS_API_Call");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                case "waf":
-                    dataSource.put("sourceName", "WAF-" + control.controlId());
-                    dataSource.put("sourceDescription", "WAF web ACL logs");
-                    dataSource.put("sourceType", "AWS_Cloudtrail");
-                    dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
-                default:
-                    // Generic evidence source - manual collection
-                    dataSource.put("sourceName", evidenceSource + "-" + control.controlId());
-                    dataSource.put("sourceDescription", "Manual evidence collection for " + evidenceSource);
-                    dataSource.put("sourceType", "MANUAL");
-                    dataSource.put("sourceSetUpOption", "Procedural_Controls_Mapping");
-                    dataSource.put("sourceFrequency", "DAILY");
-                    break;
+            if (mapping != null) {
+                dataSource.put("sourceName", mapping.namePrefix() + "-" + control.controlId());
+                dataSource.put("sourceDescription", mapping.description());
+                dataSource.put("sourceType", mapping.sourceType());
+                dataSource.put("sourceSetUpOption", "System_Controls_Mapping");
+            } else {
+                // Generic evidence source - manual collection
+                dataSource.put("sourceName", evidenceSource + "-" + control.controlId());
+                dataSource.put("sourceDescription", "Manual evidence collection for " + evidenceSource);
+                dataSource.put("sourceType", "MANUAL");
+                dataSource.put("sourceSetUpOption", "Procedural_Controls_Mapping");
             }
+            dataSource.put("sourceFrequency", "DAILY");
 
             dataSources.add(dataSource);
         }
@@ -4519,13 +3140,12 @@ public class ComplianceFactory extends BaseFactory {
         boolean shouldRetain = security == SecurityProfile.PRODUCTION;
         boolean shouldAutoDelete = !shouldRetain;
 
-        // Enable KMS encryption for compliance buckets when:
-        // 1. HIPAA or PCI-DSS compliance in PRODUCTION (mandatory)
-        // 2. cloudWatchLogsKmsEncryptionEnabled is explicitly set to true (optional hardening)
+        // Enable KMS encryption for compliance buckets when the security profile resolves
+        // cloudWatchLogsKmsEncryptionEnabled to true: on in PRODUCTION, required by a framework
+        // in ENFORCE mode, or set explicitly.
         boolean isHipaa = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("HIPAA");
         boolean isPciDss = complianceFrameworks != null && complianceFrameworks.toUpperCase().contains("PCI-DSS");
-        boolean useKms = (security == SecurityProfile.PRODUCTION && (isHipaa || isPciDss))
-                || config.isCloudWatchLogsKmsEncryptionEnabled();
+        boolean useKms = config.isCloudWatchLogsKmsEncryptionEnabled();
 
         // Enable Object Lock for compliance audit buckets when required by compliance matrix
         // HIPAA § 164.312(c)(1) - Data integrity controls
@@ -4590,31 +3210,21 @@ public class ComplianceFactory extends BaseFactory {
         // Add NagSuppressions for CDK limitations and justified architecture decisions
         // Apply to the underlying CfnBucket resource (L1) where cdk-nag checks run
         List<NagPackSuppression> suppressions = new ArrayList<>();
-        suppressions.add(NagPackSuppression.builder()
-                .id("PCI.DSS.321-S3BucketReplicationEnabled")
-                .reason("S3 replication is not required for single-region deployments. " +
-                       "Compliance data is retained in the same region with versioning enabled.")
-                .build());
-        suppressions.add(NagPackSuppression.builder()
-                .id("PCI.DSS.321-S3BucketLoggingEnabled")
-                .reason("CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
-                       "Server access logging would create circular dependency for compliance buckets.")
-                .build());
-        suppressions.add(NagPackSuppression.builder()
-                .id("HIPAA.Security-S3BucketReplicationEnabled")
-                .reason("S3 replication is not required for single-region deployments. " +
-                       "Compliance data is retained in the same region with versioning enabled.")
-                .build());
-        suppressions.add(NagPackSuppression.builder()
-                .id("PCI.DSS.321-S3DefaultEncryptionKMS")
-                .reason("Bucket uses encryption with SSL enforcement. " +
-                       "KMS encryption is applied for HIPAA/PCI-DSS PRODUCTION deployments.")
-                .build());
-        suppressions.add(NagPackSuppression.builder()
-                .id("HIPAA.Security-S3BucketLoggingEnabled")
-                .reason("CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
-                       "Server access logging would create circular dependency for compliance buckets.")
-                .build());
+        suppressions.add(NagSuppress.of("PCI.DSS.321-S3BucketReplicationEnabled",
+            "S3 replication is not required for single-region deployments. " +
+                       "Compliance data is retained in the same region with versioning enabled."));
+        suppressions.add(NagSuppress.of("PCI.DSS.321-S3BucketLoggingEnabled",
+            "CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
+                       "Server access logging would create circular dependency for compliance buckets."));
+        suppressions.add(NagSuppress.of("HIPAA.Security-S3BucketReplicationEnabled",
+            "S3 replication is not required for single-region deployments. " +
+                       "Compliance data is retained in the same region with versioning enabled."));
+        suppressions.add(NagSuppress.of("PCI.DSS.321-S3DefaultEncryptionKMS",
+            "Bucket uses encryption with SSL enforcement. " +
+                       "KMS encryption is applied for HIPAA/PCI-DSS PRODUCTION deployments."));
+        suppressions.add(NagSuppress.of("HIPAA.Security-S3BucketLoggingEnabled",
+            "CloudTrail S3 data events provide equivalent audit logging for bucket access. " +
+                       "Server access logging would create circular dependency for compliance buckets."));
 
         NagSuppressions.addResourceSuppressions(bucket, suppressions, Boolean.TRUE);
 
@@ -4830,18 +3440,18 @@ public class ComplianceFactory extends BaseFactory {
     }
 
     /**
-     * Creates auto-remediation for Security Hub enablement.
-     * Automatically enables AWS Security Hub if not already enabled.
-     *
-     * @param securityHubRule The Config rule to attach remediation to
+     * Creates an SSM Automation document that enables a service, the role it runs as, and an
+     * automatic Config remediation that runs it. The remediation carries the same condition as the
+     * rule it targets: an unconditional Ref to a condition-omitted resource fails CloudFormation
+     * validation.
      */
-    private void createSecurityHubRemediation(CfnConfigRule securityHubRule) {
-        // Create SSM Automation document for Security Hub enablement
-        CfnDocument securityHubDocument = CfnDocument.Builder.create(this, "SecurityHubEnablementDocument")
+    private void createEnablementRemediation(String name, CfnConfigRule rule, CfnCondition condition,
+                                             String description, List<Object> steps, List<String> actions) {
+        CfnDocument document = CfnDocument.Builder.create(this, name + "EnablementDocument")
                 .documentType("Automation")
                 .content(Map.of(
                     "schemaVersion", "0.3",
-                    "description", "Enables AWS Security Hub if not already enabled",
+                    "description", description,
                     "assumeRole", "{{ AutomationAssumeRole }}",
                     "parameters", Map.of(
                         "AutomationAssumeRole", Map.of(
@@ -4849,33 +3459,19 @@ public class ComplianceFactory extends BaseFactory {
                             "description", "IAM role ARN for SSM Automation"
                         )
                     ),
-                    "mainSteps", List.of(
-                        Map.of(
-                            "name", "EnableSecurityHub",
-                            "action", "aws:executeAwsApi",
-                            "onFailure", "Continue",
-                            "inputs", Map.of(
-                                "Service", "securityhub",
-                                "Api", "EnableSecurityHub"
-                            )
-                        )
-                    )
+                    "mainSteps", steps
                 ))
                 .build();
 
-        // Create IAM role for SSM Automation
-        Role ssmRole = Role.Builder.create(this, "SecurityHubRemediationRole")
+        Role ssmRole = Role.Builder.create(this, name + "RemediationRole")
                 .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
                 .inlinePolicies(Map.of(
-                    "SecurityHubPermissions",
-                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
+                    name + "Permissions",
+                    PolicyDocument.Builder.create()
                         .statements(List.of(
                             PolicyStatement.Builder.create()
                                 .effect(Effect.ALLOW)
-                                .actions(List.of(
-                                    "securityhub:EnableSecurityHub",
-                                    "securityhub:GetEnabledStandards"
-                                ))
+                                .actions(actions)
                                 .resources(List.of("*"))
                                 .build()
                         ))
@@ -4883,12 +3479,11 @@ public class ComplianceFactory extends BaseFactory {
                 ))
                 .build();
 
-        // Create remediation configuration
         CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "SecurityHubRemediation")
-                .configRuleName(securityHubRule.getRef())
+                this, name + "Remediation")
+                .configRuleName(rule.getRef())
                 .targetType("SSM_DOCUMENT")
-                .targetId(securityHubDocument.getRef())
+                .targetId(document.getRef())
                 .targetVersion("1")
                 .automatic(true)
                 .maximumAutomaticAttempts(3)
@@ -4898,11 +3493,30 @@ public class ComplianceFactory extends BaseFactory {
         remediation.addPropertyOverride("Parameters", Map.of(
             "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
         ));
-        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
-        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
-        remediation.addOverride("Condition", soc2Condition.getLogicalId());
+        remediation.addOverride("Condition", condition.getLogicalId());
 
-        LOG.info("Security Hub automatic remediation enabled");
+        LOG.info(name + " automatic remediation enabled");
+    }
+
+    /**
+     * Creates auto-remediation for Security Hub enablement.
+     * Automatically enables AWS Security Hub if not already enabled.
+     *
+     * @param securityHubRule The Config rule to attach remediation to
+     */
+    private void createSecurityHubRemediation(CfnConfigRule securityHubRule) {
+        createEnablementRemediation("SecurityHub", securityHubRule, soc2Condition,
+            "Enables AWS Security Hub if not already enabled",
+            List.of(Map.of(
+                "name", "EnableSecurityHub",
+                "action", "aws:executeAwsApi",
+                "onFailure", "Continue",
+                "inputs", Map.of(
+                    "Service", "securityhub",
+                    "Api", "EnableSecurityHub"
+                )
+            )),
+            List.of("securityhub:EnableSecurityHub", "securityhub:GetEnabledStandards"));
     }
 
     /**
@@ -4912,74 +3526,19 @@ public class ComplianceFactory extends BaseFactory {
      * @param inspectorRule The Config rule to attach remediation to
      */
     private void createInspectorRemediation(CfnConfigRule inspectorRule) {
-        // Create SSM Automation document for Inspector enablement
-        CfnDocument inspectorDocument = CfnDocument.Builder.create(this, "InspectorEnablementDocument")
-                .documentType("Automation")
-                .content(Map.of(
-                    "schemaVersion", "0.3",
-                    "description", "Enables Amazon Inspector v2 if not already enabled",
-                    "assumeRole", "{{ AutomationAssumeRole }}",
-                    "parameters", Map.of(
-                        "AutomationAssumeRole", Map.of(
-                            "type", "String",
-                            "description", "IAM role ARN for SSM Automation"
-                        )
-                    ),
-                    "mainSteps", List.of(
-                        Map.of(
-                            "name", "EnableInspector",
-                            "action", "aws:executeAwsApi",
-                            "onFailure", "Continue",
-                            "inputs", Map.of(
-                                "Service", "inspector2",
-                                "Api", "Enable",
-                                "resourceTypes", List.of("EC2", "ECR", "LAMBDA")
-                            )
-                        )
-                    )
-                ))
-                .build();
-
-        // Create IAM role for SSM Automation
-        Role ssmRole = Role.Builder.create(this, "InspectorRemediationRole")
-                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .inlinePolicies(Map.of(
-                    "InspectorPermissions",
-                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
-                        .statements(List.of(
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(List.of(
-                                    "inspector2:Enable",
-                                    "inspector2:GetConfiguration"
-                                ))
-                                .resources(List.of("*"))
-                                .build()
-                        ))
-                        .build()
-                ))
-                .build();
-
-        // Create remediation configuration
-        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "InspectorRemediation")
-                .configRuleName(inspectorRule.getRef())
-                .targetType("SSM_DOCUMENT")
-                .targetId(inspectorDocument.getRef())
-                .targetVersion("1")
-                .automatic(true)
-                .maximumAutomaticAttempts(3)
-                .retryAttemptSeconds(60)
-                .build();
-
-        remediation.addPropertyOverride("Parameters", Map.of(
-            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
-        ));
-        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
-        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
-        remediation.addOverride("Condition", soc2Condition.getLogicalId());
-
-        LOG.info("Inspector automatic remediation enabled");
+        createEnablementRemediation("Inspector", inspectorRule, soc2Condition,
+            "Enables Amazon Inspector v2 if not already enabled",
+            List.of(Map.of(
+                "name", "EnableInspector",
+                "action", "aws:executeAwsApi",
+                "onFailure", "Continue",
+                "inputs", Map.of(
+                    "Service", "inspector2",
+                    "Api", "Enable",
+                    "resourceTypes", List.of("EC2", "ECR", "LAMBDA")
+                )
+            )),
+            List.of("inspector2:Enable", "inspector2:GetConfiguration"));
     }
 
     /**
@@ -4989,73 +3548,18 @@ public class ComplianceFactory extends BaseFactory {
      * @param macieRule The Config rule to attach remediation to
      */
     private void createMacieRemediation(CfnConfigRule macieRule) {
-        // Create SSM Automation document for Macie enablement
-        CfnDocument macieDocument = CfnDocument.Builder.create(this, "MacieEnablementDocument")
-                .documentType("Automation")
-                .content(Map.of(
-                    "schemaVersion", "0.3",
-                    "description", "Enables Amazon Macie if not already enabled",
-                    "assumeRole", "{{ AutomationAssumeRole }}",
-                    "parameters", Map.of(
-                        "AutomationAssumeRole", Map.of(
-                            "type", "String",
-                            "description", "IAM role ARN for SSM Automation"
-                        )
-                    ),
-                    "mainSteps", List.of(
-                        Map.of(
-                            "name", "EnableMacie",
-                            "action", "aws:executeAwsApi",
-                            "onFailure", "Continue",
-                            "inputs", Map.of(
-                                "Service", "macie2",
-                                "Api", "EnableMacie"
-                            )
-                        )
-                    )
-                ))
-                .build();
-
-        // Create IAM role for SSM Automation
-        Role ssmRole = Role.Builder.create(this, "MacieRemediationRole")
-                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .inlinePolicies(Map.of(
-                    "MaciePermissions",
-                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
-                        .statements(List.of(
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(List.of(
-                                    "macie2:EnableMacie",
-                                    "macie2:GetMacieSession"
-                                ))
-                                .resources(List.of("*"))
-                                .build()
-                        ))
-                        .build()
-                ))
-                .build();
-
-        // Create remediation configuration
-        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "MacieRemediation")
-                .configRuleName(macieRule.getRef())
-                .targetType("SSM_DOCUMENT")
-                .targetId(macieDocument.getRef())
-                .targetVersion("1")
-                .automatic(true)
-                .maximumAutomaticAttempts(3)
-                .retryAttemptSeconds(60)
-                .build();
-
-        remediation.addPropertyOverride("Parameters", Map.of(
-            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
-        ));
-        // The rule this remediation targets is condition-gated (SOC2 only); an unconditional
-        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
-        remediation.addOverride("Condition", soc2Condition.getLogicalId());
-
-        LOG.info("Macie automatic remediation enabled");
+        createEnablementRemediation("Macie", macieRule, soc2Condition,
+            "Enables Amazon Macie if not already enabled",
+            List.of(Map.of(
+                "name", "EnableMacie",
+                "action", "aws:executeAwsApi",
+                "onFailure", "Continue",
+                "inputs", Map.of(
+                    "Service", "macie2",
+                    "Api", "EnableMacie"
+                )
+            )),
+            List.of("macie2:EnableMacie", "macie2:GetMacieSession"));
     }
 
     /**
@@ -5065,114 +3569,61 @@ public class ComplianceFactory extends BaseFactory {
      * @param guardDutyRule The Config rule to attach remediation to
      */
     private void createGuardDutyRemediation(CfnConfigRule guardDutyRule) {
-        // Create SSM Automation document for GuardDuty enablement
-        // Uses idempotent approach: check if detector exists before creating
-        CfnDocument guardDutyDocument = CfnDocument.Builder.create(this, "GuardDutyEnablementDocument")
-                .documentType("Automation")
-                .content(Map.of(
-                    "schemaVersion", "0.3",
-                    "description", "Enables AWS GuardDuty if not already enabled (idempotent)",
-                    "assumeRole", "{{ AutomationAssumeRole }}",
-                    "parameters", Map.of(
-                        "AutomationAssumeRole", Map.of(
-                            "type", "String",
-                            "description", "IAM role ARN for SSM Automation"
-                        )
+        // Idempotent: the detector is only created when none exists
+        createEnablementRemediation("GuardDuty", guardDutyRule, pciDssCondition,
+            "Enables AWS GuardDuty if not already enabled (idempotent)",
+            List.of(
+                Map.of(
+                    "name", "CheckGuardDutyStatus",
+                    "action", "aws:executeAwsApi",
+                    "onFailure", "Continue",
+                    "inputs", Map.of(
+                        "Service", "guardduty",
+                        "Api", "ListDetectors"
                     ),
-                    "mainSteps", List.of(
+                    "outputs", List.of(
                         Map.of(
-                            "name", "CheckGuardDutyStatus",
-                            "action", "aws:executeAwsApi",
-                            "onFailure", "Continue",
-                            "inputs", Map.of(
-                                "Service", "guardduty",
-                                "Api", "ListDetectors"
-                            ),
-                            "outputs", List.of(
-                                Map.of(
-                                    "Name", "DetectorIds",
-                                    "Selector", "$.DetectorIds",
-                                    "Type", "StringList"
-                                )
-                            )
-                        ),
-                        Map.of(
-                            "name", "EnableGuardDuty",
-                            "action", "aws:branch",
-                            "inputs", Map.of(
-                                "Choices", List.of(
-                                    Map.of(
-                                        "NextStep", "CreateDetector",
-                                        "Variable", "{{ CheckGuardDutyStatus.DetectorIds }}",
-                                        "StringEquals", "[]"
-                                    )
-                                ),
-                                "Default", "AlreadyEnabled"
-                            )
-                        ),
-                        Map.of(
-                            "name", "CreateDetector",
-                            "action", "aws:executeAwsApi",
-                            "inputs", Map.of(
-                                "Service", "guardduty",
-                                "Api", "CreateDetector",
-                                "Enable", true,
-                                "FindingPublishingFrequency", "FIFTEEN_MINUTES"
-                            ),
-                            "isEnd", true
-                        ),
-                        Map.of(
-                            "name", "AlreadyEnabled",
-                            "action", "aws:sleep",
-                            "inputs", Map.of(
-                                "Duration", "PT0S"
-                            ),
-                            "isEnd", true
+                            "Name", "DetectorIds",
+                            "Selector", "$.DetectorIds",
+                            "Type", "StringList"
                         )
                     )
-                ))
-                .build();
-
-        // Create IAM role for SSM Automation
-        Role ssmRole = Role.Builder.create(this, "GuardDutyRemediationRole")
-                .assumedBy(new ServicePrincipal("ssm.amazonaws.com"))
-                .inlinePolicies(Map.of(
-                    "GuardDutyPermissions",
-                    software.amazon.awscdk.services.iam.PolicyDocument.Builder.create()
-                        .statements(List.of(
-                            PolicyStatement.Builder.create()
-                                .effect(Effect.ALLOW)
-                                .actions(List.of(
-                                    "guardduty:CreateDetector",
-                                    "guardduty:ListDetectors"
-                                ))
-                                .resources(List.of("*"))
-                                .build()
-                        ))
-                        .build()
-                ))
-                .build();
-
-        // Create remediation configuration
-        CfnRemediationConfiguration remediation = CfnRemediationConfiguration.Builder.create(
-                this, "GuardDutyRemediation")
-                .configRuleName(guardDutyRule.getRef())
-                .targetType("SSM_DOCUMENT")
-                .targetId(guardDutyDocument.getRef())
-                .targetVersion("1")
-                .automatic(true)
-                .maximumAutomaticAttempts(3)
-                .retryAttemptSeconds(60)
-                .build();
-
-        remediation.addPropertyOverride("Parameters", Map.of(
-            "AutomationAssumeRole", Map.of("StaticValue", Map.of("Values", List.of(ssmRole.getRoleArn())))
-        ));
-        // The rule this remediation targets is condition-gated (PCI-DSS only); an unconditional
-        // Ref to a condition-omitted resource fails CloudFormation validation, so mirror it here.
-        remediation.addOverride("Condition", pciDssCondition.getLogicalId());
-
-        LOG.info("GuardDuty automatic remediation enabled");
+            ),
+            Map.of(
+                "name", "EnableGuardDuty",
+                "action", "aws:branch",
+                "inputs", Map.of(
+                    "Choices", List.of(
+                        Map.of(
+                            "NextStep", "CreateDetector",
+                            "Variable", "{{ CheckGuardDutyStatus.DetectorIds }}",
+                            "StringEquals", "[]"
+                        )
+                    ),
+                    "Default", "AlreadyEnabled"
+                )
+            ),
+            Map.of(
+                "name", "CreateDetector",
+                "action", "aws:executeAwsApi",
+                "inputs", Map.of(
+                    "Service", "guardduty",
+                    "Api", "CreateDetector",
+                    "Enable", true,
+                    "FindingPublishingFrequency", "FIFTEEN_MINUTES"
+                ),
+                "isEnd", true
+            ),
+            Map.of(
+                "name", "AlreadyEnabled",
+                "action", "aws:sleep",
+                "inputs", Map.of(
+                    "Duration", "PT0S"
+                ),
+                "isEnd", true
+            )
+            ),
+            List.of("guardduty:CreateDetector", "guardduty:ListDetectors"));
     }
 
     /**
@@ -5196,28 +3647,20 @@ public class ComplianceFactory extends BaseFactory {
         NagSuppressions.addResourceSuppressions(
             customResourceFunction,
             List.of(
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-IAMNoInlinePolicy")
-                    .reason("This Lambda's own execution policy is scoped to a single " +
+                NagSuppress.of("PCI.DSS.321-IAMNoInlinePolicy",
+                    "This Lambda's own execution policy is scoped to a single " +
                            "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
-                           "right shape for a permission this narrow.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("PCI.DSS.321-LambdaInsideVPC")
-                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
-                           "require VPC access.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("HIPAA.Security-IAMNoInlinePolicy")
-                    .reason("This Lambda's own execution policy is scoped to a single " +
+                           "right shape for a permission this narrow."),
+                NagSuppress.of("PCI.DSS.321-LambdaInsideVPC",
+                    "This custom resource Lambda only makes an SSM API call and does not " +
+                           "require VPC access."),
+                NagSuppress.of("HIPAA.Security-IAMNoInlinePolicy",
+                    "This Lambda's own execution policy is scoped to a single " +
                            "ssm:PutParameter call on one parameter ARN -- an inline policy is the " +
-                           "right shape for a permission this narrow.")
-                    .build(),
-                NagPackSuppression.builder()
-                    .id("HIPAA.Security-LambdaInsideVPC")
-                    .reason("This custom resource Lambda only makes an SSM API call and does not " +
+                           "right shape for a permission this narrow."),
+                NagSuppress.of("HIPAA.Security-LambdaInsideVPC",
+                    "This custom resource Lambda only makes an SSM API call and does not " +
                            "require VPC access.")
-                    .build()
             ),
             Boolean.TRUE
         );
@@ -5258,5 +3701,24 @@ public class ComplianceFactory extends BaseFactory {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 is always available", e);
         }
+    }
+
+    /**
+     * Creates an AWS managed Config rule that exists only when {@code condition} holds and is deleted
+     * with the stack.
+     */
+    private CfnConfigRule managedConfigRule(String id, String name, String description,
+                                            String sourceIdentifier, CfnCondition condition) {
+        CfnConfigRule rule = CfnConfigRule.Builder.create(this, id)
+                .configRuleName(name)
+                .description(description)
+                .source(CfnConfigRule.SourceProperty.builder()
+                        .owner("AWS")
+                        .sourceIdentifier(sourceIdentifier)
+                        .build())
+                .build();
+        rule.addOverride("DeletionPolicy", "Delete");
+        rule.addOverride("Condition", condition.getLogicalId());
+        return rule;
     }
 }
