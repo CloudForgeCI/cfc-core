@@ -125,6 +125,17 @@ public interface ApplicationSpec {
     }
 
     /**
+     * Whether the container's root filesystem is mounted read-only. When true, the container gets
+     * a writable ephemeral {@code /tmp} volume and the application data volume; everything else
+     * is read-only. Defaults to false because most application images write outside those paths.
+     *
+     * @return true to set {@code readonlyRootFilesystem} on the container definition
+     */
+    default boolean readOnlyRootFilesystem() {
+        return false;
+    }
+
+    /**
      * Configures application-specific environment variables for the container.
      *
      * <p>Applications can override this to provide custom environment variables

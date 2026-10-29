@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.storage;
 
 
+import com.cloudforgeci.api.core.TlsTrustEvaluator;
 import com.cloudforgeci.api.core.annotation.BaseFactory;
 import com.cloudforge.core.annotation.DeploymentContext;
 import com.cloudforge.core.annotation.SystemContext;
@@ -11,6 +12,7 @@ import com.cloudforge.core.interfaces.DatabaseSpec;
 import com.cloudforge.core.interfaces.OidcConfiguration;
 import com.cloudforge.core.interfaces.OidcIntegration;
 import software.amazon.awscdk.Duration;
+import software.amazon.awscdk.Token;
 import software.amazon.awscdk.services.ecs.*;
 import software.amazon.awscdk.services.elasticloadbalancingv2.ApplicationLoadBalancer;
 import software.amazon.awscdk.services.iam.Effect;
@@ -192,7 +194,7 @@ public class ContainerFactory extends BaseFactory {
 
             String publicTlsTrustedEnvVar = applicationSpec.publicTlsTrustedEnvVar();
             if (publicTlsTrustedEnvVar != null && !publicTlsTrustedEnvVar.isBlank()) {
-                boolean publiclyTrusted = com.cloudforgeci.api.core.TlsTrustEvaluator.isPubliclyTrusted(
+                boolean publiclyTrusted = TlsTrustEvaluator.isPubliclyTrusted(
                     sslEnabled, domain, fqdn, certificateArn);
                 environment.put(publicTlsTrustedEnvVar, String.valueOf(publiclyTrusted));
             }
@@ -459,7 +461,7 @@ public class ContainerFactory extends BaseFactory {
                         // deploy time. Unresolved Tokens always resolve to a full ARN, so they take
                         // the ARN branch; only a literal non-ARN value (a secret name supplied in
                         // the deployment context) uses fromSecretNameV2.
-                        boolean isCompleteArn = software.amazon.awscdk.Token.isUnresolved(clientSecretArn)
+                        boolean isCompleteArn = Token.isUnresolved(clientSecretArn)
                             || clientSecretArn.startsWith("arn:");
                         ISecret clientSecret = isCompleteArn
                             ? Secret.fromSecretCompleteArn(this, "OidcClientSecret", clientSecretArn)
@@ -543,10 +545,14 @@ public class ContainerFactory extends BaseFactory {
         String containerPath = applicationSpec != null ? applicationSpec.containerDataPath() : "/var/jenkins_home";
         String volumeName = applicationSpec != null ? applicationSpec.volumeName() : "jenkinsHome";
 
+        boolean readOnlyRoot = applicationSpec != null && applicationSpec.readOnlyRootFilesystem();
+
         // Build container options - only set user if containerUser is not null
         ContainerDefinitionOptions.Builder containerOptionsBuilder = ContainerDefinitionOptions.builder()
                 .containerName(getNode().getId())
                 .image(image)
+                .privileged(false)
+                .readonlyRootFilesystem(readOnlyRoot)
                 .environment(environment.isEmpty() ? null : environment)
                 .secrets(ecsSecrets.isEmpty() ? null : ecsSecrets)
                 .logging(LogDriver.awsLogs(AwsLogDriverProps.builder()
@@ -730,7 +736,7 @@ public class ContainerFactory extends BaseFactory {
                     }
 
                     // Add a volume for the SAML certificate
-                    fargateTaskDef.addVolume(software.amazon.awscdk.services.ecs.Volume.builder()
+                    fargateTaskDef.addVolume(Volume.builder()
                         .name(samlCertVolumeName)
                         .build());
                     LOG.info("  ✅ Added shared volume '" + samlCertVolumeName + "' for SAML certificate");
@@ -830,6 +836,15 @@ public class ContainerFactory extends BaseFactory {
                              optionalPort.protocol() + " (" + optionalPort.service() + ")");
                 }
             }
+        }
+
+        if (readOnlyRoot) {
+            fargateTaskDef.addVolume(Volume.builder().name("tmp").build());
+            container.addMountPoints(MountPoint.builder()
+                    .containerPath("/tmp")
+                    .sourceVolume("tmp")
+                    .readOnly(false)
+                    .build());
         }
 
         container.addMountPoints(MountPoint

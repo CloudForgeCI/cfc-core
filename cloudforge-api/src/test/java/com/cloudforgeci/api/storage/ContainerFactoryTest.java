@@ -1,6 +1,14 @@
 package com.cloudforgeci.api.storage;
 
+import com.cloudforgeci.api.application.JenkinsApplicationSpec;
+import com.cloudforgeci.api.compute.ApplicationFactory;
+import com.cloudforgeci.api.core.DeploymentContext;
 import com.cloudforgeci.api.test.TestInfrastructureBuilder;
+import com.cloudforge.core.iam.IAMProfileMapper;
+import software.amazon.awscdk.App;
+import software.amazon.awscdk.Environment;
+import software.amazon.awscdk.Stack;
+import software.amazon.awscdk.StackProps;
 import com.cloudforge.core.enums.RuntimeType;
 import com.cloudforge.core.enums.SecurityProfile;
 import software.amazon.awscdk.assertions.Match;
@@ -238,6 +246,55 @@ public class ContainerFactoryTest {
           ))
         ))
       ))
+    ));
+  }
+
+  @Test
+  void containerIsUnprivilegedWithWritableRootByDefault() {
+    TestInfrastructureBuilder builder = new TestInfrastructureBuilder("ContainerDefaultsTest", SecurityProfile.DEV, RuntimeType.FARGATE);
+    builder.createCompleteInfrastructure();
+
+    Template t = Template.fromStack(builder.getStack());
+
+    t.hasResourceProperties("AWS::ECS::TaskDefinition", Map.of(
+      "ContainerDefinitions", Match.arrayWith(List.of(
+        Match.objectLike(Map.of("Privileged", false, "ReadonlyRootFilesystem", false))
+      ))
+    ));
+  }
+
+  @Test
+  void readOnlyRootFilesystemAddsWritableTmpVolume() {
+    Map<String, Object> context = new HashMap<>();
+    context.put("stackName", "ContainerReadOnlyTest");
+    context.put("region", "us-east-1");
+    context.put("runtime", "FARGATE");
+    context.put("topology", "APPLICATION_SERVICE");
+    context.put("securityProfile", "DEV");
+    context.put("applicationId", "jenkins");
+    Stack stack = new Stack(new App(), "ContainerReadOnlyTest", StackProps.builder()
+      .env(Environment.builder().account("123456789012").region("us-east-1").build()).build());
+    stack.getNode().setContext("cfc", context);
+    JenkinsApplicationSpec readOnly = new JenkinsApplicationSpec() {
+      @Override public boolean readOnlyRootFilesystem() {
+        return true;
+      }
+    };
+    ApplicationFactory.createFargate(stack, "TestApp", DeploymentContext.from(stack), SecurityProfile.DEV,
+      IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV), readOnly);
+
+    Template t = Template.fromStack(stack);
+    t.hasResourceProperties("AWS::ECS::TaskDefinition", Map.of(
+      "ContainerDefinitions", Match.arrayWith(List.of(
+        Match.objectLike(Map.of(
+          "Privileged", false,
+          "ReadonlyRootFilesystem", true,
+          "MountPoints", Match.arrayWith(List.of(
+            Match.objectLike(Map.of("ContainerPath", "/tmp", "SourceVolume", "tmp", "ReadOnly", false))
+          ))
+        ))
+      )),
+      "Volumes", Match.arrayWith(List.of(Match.objectLike(Map.of("Name", "tmp"))))
     ));
   }
 }
