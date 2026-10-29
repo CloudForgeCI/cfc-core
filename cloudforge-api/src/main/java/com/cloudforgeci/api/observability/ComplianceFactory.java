@@ -8,6 +8,8 @@ import com.cloudforge.core.annotation.SystemContext;
 import com.cloudforge.core.enums.ComplianceMode;
 import com.cloudforgeci.api.core.rules.AuditManagerControl;
 import com.cloudforgeci.api.core.rules.AuditManagerControlRegistry;
+import com.cloudforgeci.api.core.iam.ManagerOperatorIamSupport;
+import com.cloudforge.core.manager.ManagerEnvKeys;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforgeci.api.core.customresource.AssetFreeCustomResource;
 import software.amazon.awscdk.Aws;
@@ -20,6 +22,7 @@ import software.amazon.awscdk.Stack;
 import software.amazon.awscdk.services.auditmanager.CfnAssessment;
 import software.amazon.awscdk.services.cloudtrail.Trail;
 import software.amazon.awscdk.services.cloudtrail.CfnTrail;
+import software.amazon.awscdk.services.s3.ObjectLockRetention;
 import software.amazon.awscdk.services.config.*;
 import software.amazon.awscdk.services.iam.CfnRole;
 import software.amazon.awscdk.services.iam.Role;
@@ -195,6 +198,14 @@ public class ComplianceFactory extends BaseFactory {
             createCloudTrail();
         } else {
             LOG.info("CloudTrail disabled for security profile: " + security);
+        }
+
+        // CloudTrail Lake custom-event ingestion for Manager's own self-issued OIDC sign-ins
+        // (ManagerSessionAuthenticationFilter) -- those have no underlying AWS API call for the
+        // Trail above to ever capture, regardless of CloudTrail configuration. Gated so this
+        // never attaches to a customer application's own stack.
+        if (ManagerOperatorIamSupport.isCloudForgeManager(ctx)) {
+            createManagerAuditTrailChannel();
         }
 
         // Check if AWS Audit Manager should be enabled (do this BEFORE Config infrastructure)
@@ -716,6 +727,64 @@ public class ComplianceFactory extends BaseFactory {
 
         // No action needed - CloudTrail already tracks all S3 buckets via wildcard configuration
         LOG.info("S3 data event logging already enabled for all buckets (including " + bucket.getBucketName() + ")");
+    }
+
+    /**
+     * CloudTrail Lake event data store + integration channel for custom application events --
+     * structurally separate from the {@code Trail} resource {@link #createCloudTrail()} creates
+     * (a Trail only ever captures AWS API calls it observed itself; it has no mechanism to accept
+     * an application-pushed event). Manager's own self-issued OIDC sign-ins
+     * (ManagerSessionAuthenticationFilter) have no underlying AWS API call at all for a Trail to
+     * capture, so this gives them a durable, tamper-evident destination instead.
+     *
+     * <p>Originally implemented via CloudTrail Lake's {@code PutAuditEvents} -- reverted, since AWS
+     * closed CloudTrail Lake to new customers on 2026-05-31: a {@code CfnEventDataStore} would fail
+     * CloudFormation deployment outright for any account that hadn't already enrolled, i.e. nearly
+     * every Manager deployment going forward. An S3 bucket with Object Lock (compliance-mode
+     * retention) gives the same tamper-evident property -- available to every AWS account
+     * unconditionally, no enrollment/closure risk.
+     *
+     * <p>The bucket's ARN is published via {@link #storeResourceArnInSSMAlways} for operational
+     * discoverability (the same mechanism {@link #createConfigInfrastructure} uses for its
+     * Recorder/Channel ARNs), and also injected directly into Manager's own Fargate container
+     * environment via {@code ContainerDefinition#addEnvironment} on {@code ctx.container} --
+     * Manager has no existing mechanism to learn its own stack name/region at runtime, so it has
+     * no way to build the SSM parameter name itself and read the value back. This factory's own
+     * wiring runs as a deferred action, after {@code ContainerFactory} has already built the
+     * container (see {@code ctx.container}'s own javadoc), so the container always exists by this
+     * point; EC2 runtime has no equivalent container-definition env-var hook, so {@code
+     * SignInAuditService} simply degrades to DB-only writes there, the same as any other target
+     * with nothing configured. Grants Manager's own task/instance role {@code s3:PutObject} scoped
+     * to the bucket, the permission the cloudforge-manager side needs to write a sign-in record.
+     */
+    private void createManagerAuditTrailChannel() {
+        LOG.info("Creating Object Lock S3 bucket for Manager sign-in audit events");
+
+        Bucket auditBucket = Bucket.Builder.create(this, "ManagerSignInAuditBucket")
+            .blockPublicAccess(BlockPublicAccess.BLOCK_ALL)
+            .removalPolicy(RemovalPolicy.RETAIN) // Object Lock requires RETAIN
+            .versioned(true)
+            .objectLockEnabled(true)
+            .objectLockDefaultRetention(ObjectLockRetention.compliance(
+                Duration.days(2557))) // 7 years, matching this file's other long-retention compliance defaults
+            .build();
+
+        CustomResource bucketArnSsmWriter = storeResourceArnInSSMAlways("ManagerSignInAuditBucketArn",
+            "/cloudforge/shared/" + this.region + "/stack/" + this.stackName + "/sign-in-audit/bucket-arn",
+            auditBucket.getBucketArn(),
+            "Manager sign-in audit bucket ARN for stack " + this.stackName);
+        bucketArnSsmWriter.getNode().addDependency(auditBucket);
+
+        ctx.container.get().ifPresent(c ->
+            c.addEnvironment(ManagerEnvKeys.AUDIT_TRAIL_BUCKET_ARN, auditBucket.getBucketArn()));
+
+        PolicyStatement putSignInAuditObject = PolicyStatement.Builder.create()
+            .sid("CloudForgeManagerAuditTrailPutObject")
+            .actions(List.of("s3:PutObject"))
+            .resources(List.of(auditBucket.getBucketArn() + "/*"))
+            .build();
+        ctx.fargateTaskRole.get().ifPresent(role -> role.addToPolicy(putSignInAuditObject));
+        ctx.ec2InstanceRole.get().ifPresent(role -> role.addToPolicy(putSignInAuditObject));
     }
 
     /**

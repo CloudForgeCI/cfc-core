@@ -103,6 +103,49 @@ class ComplianceFactoryTest {
     }
 
     @Test
+    void managerAppGetsTheSignInAuditBucket() {
+        // Given: a stack whose applicationId is cloudforge-manager (isCloudForgeManager(ctx) gate)
+        App app = new App();
+        Stack stack = new Stack(app, "TestManagerAuditTrail");
+
+        Map<String, Object> cfcContext = new HashMap<>();
+        cfcContext.put("stackName", "TestManagerAuditTrail");
+        cfcContext.put("securityProfile", "PRODUCTION");
+        cfcContext.put("applicationId", "cloudforge-manager");
+        cfcContext.put("domain", "example.com");
+        stack.getNode().setContext("cfc", cfcContext);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+        assertDoesNotThrow(factory::create);
+
+        assertNotNull(factory.getNode().tryFindChild("ManagerSignInAuditBucket"),
+            "Manager stacks should get an Object Lock bucket for sign-in audit events");
+    }
+
+    @Test
+    void nonManagerAppNeverGetsTheSignInAuditBucket() {
+        // Given: an ordinary application stack (no applicationId override)
+        App app = new App();
+        Stack stack = createTestStack(app, "TestNonManagerNoAuditTrail", SecurityProfile.PRODUCTION);
+
+        DeploymentContext cfc = DeploymentContext.from(stack);
+        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
+        SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
+                SecurityProfile.PRODUCTION, iamProfile, cfc);
+
+        ComplianceFactory factory = new ComplianceFactory(stack, "Compliance");
+        assertDoesNotThrow(factory::create);
+
+        assertNull(factory.getNode().tryFindChild("ManagerSignInAuditBucket"),
+            "Non-Manager applications must never get the Manager-only sign-in audit bucket");
+    }
+
+    @Test
     void testComplianceFactoryWithAwsConfigEnabled() {
         // Given: A stack with AWS Config explicitly enabled
         App app = new App();
