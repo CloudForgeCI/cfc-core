@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * HIPAA Security Rule compliance validation.
@@ -133,33 +134,21 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         );
 
         // §164.308(a)(1)(ii)(D) - Information System Activity Review
-        if (!config.isSecurityMonitoringEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.308(a)(1)(ii)(D)-Monitoring",
-                "Security monitoring required for information system activity review (HIPAA §164.308(a)(1)(ii)(D))",
-                "Enable security monitoring to detect and respond to security incidents."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.308(a)(1)(ii)(D)-Monitoring",
-                "Security monitoring enabled for information system activity review (HIPAA §164.308(a)(1)(ii)(D))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isSecurityMonitoringEnabled(),
+            "HIPAA-164.308(a)(1)(ii)(D)-Monitoring",
+            "Security monitoring enabled for information system activity review (HIPAA §164.308(a)(1)(ii)(D))",
+            "Security monitoring required for information system activity review (HIPAA §164.308(a)(1)(ii)(D))",
+            null,
+            "Enable security monitoring to detect and respond to security incidents."));
 
-        if (!config.isGuardDutyEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.308(a)(1)(ii)(D)-GuardDuty",
-                "GuardDuty threat detection required (HIPAA §164.308(a)(1)(ii)(D))",
-                "GuardDutyEnabled",
-                "GuardDuty threat detection required for security incident identification."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.308(a)(1)(ii)(D)-GuardDuty",
-                "GuardDuty threat detection enabled (HIPAA §164.308(a)(1)(ii)(D))",
-                "GuardDutyEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isGuardDutyEnabled(),
+            "HIPAA-164.308(a)(1)(ii)(D)-GuardDuty",
+            "GuardDuty threat detection enabled (HIPAA §164.308(a)(1)(ii)(D))",
+            "GuardDuty threat detection required (HIPAA §164.308(a)(1)(ii)(D))",
+            "GuardDutyEnabled",
+            "GuardDuty threat detection required for security incident identification."));
 
         return rules;
     }
@@ -172,20 +161,13 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // §164.308(a)(4)(ii)(C) - Access Establishment and Modification
-        if (ctx.iamProfile == null) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.308(a)(4)(ii)(C)-IAM",
-                "IAM profile required for access control management (HIPAA §164.308(a)(4)(ii)(C))",
-                "IAMPasswordPolicyRule",
-                "Implement role-based access controls for PHI access."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.308(a)(4)(ii)(C)-IAM",
-                "IAM profile configured for access control management (HIPAA §164.308(a)(4)(ii)(C))",
-                "IAMPasswordPolicyRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.iamProfile == null),
+            "HIPAA-164.308(a)(4)(ii)(C)-IAM",
+            "IAM profile configured for access control management (HIPAA §164.308(a)(4)(ii)(C))",
+            "IAM profile required for access control management (HIPAA §164.308(a)(4)(ii)(C))",
+            "IAMPasswordPolicyRule",
+            "Implement role-based access controls for PHI access."));
 
         return rules;
     }
@@ -202,20 +184,13 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         );
 
         // §164.310(d)(2)(iii) - Data Backup and Storage
-        if (!config.isAutomatedBackupEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.310(d)(2)(iii)-Backup",
-                "Automated backup required for PHI data protection (HIPAA §164.310(d)(2)(iii))",
-                "EfsBackupEnabled",
-                "Enable automated backups to ensure data availability and disaster recovery."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.310(d)(2)(iii)-Backup",
-                "Automated backup enabled for PHI data protection (HIPAA §164.310(d)(2)(iii))",
-                "EfsBackupEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAutomatedBackupEnabled(),
+            "HIPAA-164.310(d)(2)(iii)-Backup",
+            "Automated backup enabled for PHI data protection (HIPAA §164.310(d)(2)(iii))",
+            "Automated backup required for PHI data protection (HIPAA §164.310(d)(2)(iii))",
+            "EfsBackupEnabled",
+            "Enable automated backups to ensure data availability and disaster recovery."));
 
         // Cross-region backup for disaster recovery
         boolean isProdOrStaging = ctx.security == SecurityProfile.PRODUCTION || ctx.security == SecurityProfile.STAGING;
@@ -244,32 +219,22 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
 
         // §164.312(a)(2)(i) - Unique User Identification (Required)
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(a)(2)(i)-Auth",
-                "Unique user identification required for PHI access (HIPAA §164.312(a)(2)(i))",
-                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to identify and authenticate users."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(a)(2)(i)-Auth",
-                "Unique user identification enabled for PHI access (HIPAA §164.312(a)(2)(i))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "HIPAA-164.312(a)(2)(i)-Auth",
+            "Unique user identification enabled for PHI access (HIPAA §164.312(a)(2)(i))",
+            "Unique user identification required for PHI access (HIPAA §164.312(a)(2)(i))",
+            null,
+            "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' to identify and authenticate users."));
 
         // Validate network access controls
-        if (ctx.albSg.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(a)(1)-NetworkAccess",
-                "Access controls required at network level (HIPAA §164.312(a)(1))",
-                "Security groups must restrict access to PHI systems."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(a)(1)-NetworkAccess",
-                "Network access controls configured (HIPAA §164.312(a)(1))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.albSg.get().isEmpty(),
+            "HIPAA-164.312(a)(1)-NetworkAccess",
+            "Network access controls configured (HIPAA §164.312(a)(1))",
+            "Access controls required at network level (HIPAA §164.312(a)(1))",
+            null,
+            "Security groups must restrict access to PHI systems."));
 
         return rules;
     }
@@ -286,50 +251,29 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         );
 
         // §164.312(b) - Audit Controls (Required)
-        if (!config.isCloudTrailEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(b)-CloudTrail",
-                "CloudTrail audit logging required (HIPAA §164.312(b))",
-                "CloudTrailEnabledRule",
-                "Enable CloudTrail to record configured API activity."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(b)-CloudTrail",
-                "CloudTrail audit logging enabled (HIPAA §164.312(b))",
-                "CloudTrailEnabledRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isCloudTrailEnabled(),
+            "HIPAA-164.312(b)-CloudTrail",
+            "CloudTrail audit logging enabled (HIPAA §164.312(b))",
+            "CloudTrail audit logging required (HIPAA §164.312(b))",
+            "CloudTrailEnabledRule",
+            "Enable CloudTrail to record configured API activity."));
 
-        if (!config.isFlowLogsEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(b)-FlowLogs",
-                "VPC Flow Logs required to audit network access (HIPAA §164.312(b))",
-                "VpcFlowLogsEnabled",
-                "Enable Flow Logs to record all network traffic."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(b)-FlowLogs",
-                "VPC Flow Logs enabled for network access audit (HIPAA §164.312(b))",
-                "VpcFlowLogsEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isFlowLogsEnabled(),
+            "HIPAA-164.312(b)-FlowLogs",
+            "VPC Flow Logs enabled for network access audit (HIPAA §164.312(b))",
+            "VPC Flow Logs required to audit network access (HIPAA §164.312(b))",
+            "VpcFlowLogsEnabled",
+            "Enable Flow Logs to record all network traffic."));
 
-        if (!config.isAlbAccessLoggingEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(b)-ALB",
-                "ALB access logging required (HIPAA §164.312(b))",
-                "AlbAccessLogsEnabled",
-                "Enable ALB access logs to record incoming requests."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(b)-ALB",
-                "ALB access logging enabled (HIPAA §164.312(b))",
-                "AlbAccessLogsEnabled"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isAlbAccessLoggingEnabled(),
+            "HIPAA-164.312(b)-ALB",
+            "ALB access logging enabled (HIPAA §164.312(b))",
+            "ALB access logging required (HIPAA §164.312(b))",
+            "AlbAccessLogsEnabled",
+            "Enable ALB access logs to record incoming requests."));
 
         return rules;
     }
@@ -375,18 +319,13 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
 
         // §164.312(d) - Authentication (Required)
         AuthMode authMode = ctx.cfc.authMode();
-        if (authMode == AuthMode.NONE) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(d)-Auth",
-                "Authentication required for all users accessing ePHI (HIPAA §164.312(d))",
-                "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' with strong authentication mechanism."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(d)-Auth",
-                "Authentication enabled for ePHI access (HIPAA §164.312(d))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(authMode == AuthMode.NONE),
+            "HIPAA-164.312(d)-Auth",
+            "Authentication enabled for ePHI access (HIPAA §164.312(d))",
+            "Authentication required for all users accessing ePHI (HIPAA §164.312(d))",
+            null,
+            "Configure authMode = 'alb-oidc', 'jenkins-oidc', or 'application-oidc' with strong authentication mechanism."));
 
         // Multi-factor authentication (Addressable - but highly recommended)
         if (authMode == AuthMode.ALB_OIDC || authMode == AuthMode.APPLICATION_OIDC) {
@@ -395,21 +334,14 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
                                        && Boolean.TRUE.equals(ctx.cfc.cognitoMfaEnabled());
             boolean hasValidSso = ctx.cfc.ssoInstanceArn() != null && !ctx.cfc.ssoInstanceArn().isEmpty();
 
-            if (!usingCognitoWithMfa && !hasValidSso) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.312(d)-MFA",
-                    "Multi-factor authentication recommended for ePHI access (HIPAA §164.312(d))",
-                    "IAMMfaEnabled",
-                    "Either: (1) Enable Cognito MFA: cognitoAutoProvision = true, cognitoMfaEnabled = true " +
-                    "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.312(d)-MFA",
-                    "Multi-factor authentication configured for ePHI access (HIPAA §164.312(d))",
-                    "IAMMfaEnabled"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                !(!usingCognitoWithMfa && !hasValidSso),
+                "HIPAA-164.312(d)-MFA",
+                "Multi-factor authentication configured for ePHI access (HIPAA §164.312(d))",
+                "Multi-factor authentication recommended for ePHI access (HIPAA §164.312(d))",
+                "IAMMfaEnabled",
+                "Either: (1) Enable Cognito MFA: cognitoAutoProvision = true, cognitoMfaEnabled = true " +
+                    "OR (2) Configure AWS IAM Identity Center: provide ssoInstanceArn with MFA enforcement."));
         }
 
         return rules;
@@ -427,66 +359,40 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
         );
 
         // §164.312(e)(2)(i) - SSL/TLS must be enabled for encrypted ePHI transmission
-        if (!ctx.cfc.enableSsl()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(e)(2)(i)-SSL",
-                "SSL/TLS must be enabled for encrypted transmission of ePHI (HIPAA §164.312(e)(2)(i))",
-                "ALBHttpsOnly",
-                "Set enableSsl=true for production HIPAA compliance."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(e)(2)(i)-SSL",
-                "SSL/TLS enabled for transmission security (HIPAA §164.312(e)(2)(i))",
-                "ALBHttpsOnly"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            ctx.cfc.enableSsl(),
+            "HIPAA-164.312(e)(2)(i)-SSL",
+            "SSL/TLS enabled for transmission security (HIPAA §164.312(e)(2)(i))",
+            "SSL/TLS must be enabled for encrypted transmission of ePHI (HIPAA §164.312(e)(2)(i))",
+            "ALBHttpsOnly",
+            "Set enableSsl=true for production HIPAA compliance."));
 
         // §164.312(e)(2)(i) - Integrity Controls (Addressable - we enforce)
-        if (ctx.cert.get().isEmpty()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(e)(2)(i)-TLS",
-                "TLS certificate required for transmission integrity and confidentiality (HIPAA §164.312(e)(2)(i))",
-                "ALBHttpsOnly",
-                "Configure ACM certificate for HTTPS communication."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(e)(2)(i)-TLS",
-                "TLS certificate configured for transmission security (HIPAA §164.312(e)(2)(i))",
-                "ALBHttpsOnly"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !ctx.cert.get().isEmpty(),
+            "HIPAA-164.312(e)(2)(i)-TLS",
+            "TLS certificate configured for transmission security (HIPAA §164.312(e)(2)(i))",
+            "TLS certificate required for transmission integrity and confidentiality (HIPAA §164.312(e)(2)(i))",
+            "ALBHttpsOnly",
+            "Configure ACM certificate for HTTPS communication."));
 
         // §164.312(e)(2)(ii) - Encryption (Addressable - we enforce)
-        if (!config.isEfsEncryptionInTransitEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(e)(2)(ii)-EFS",
-                "EFS encryption in transit required for ePHI transmission security (HIPAA §164.312(e)(2)(ii))",
-                "EfsEncryptionRule",
-                "Enable EFS in-transit encryption to protect PHI during file system access."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(e)(2)(ii)-EFS",
-                "EFS encryption in transit enabled (HIPAA §164.312(e)(2)(ii))",
-                "EfsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            config.isEfsEncryptionInTransitEnabled(),
+            "HIPAA-164.312(e)(2)(ii)-EFS",
+            "EFS encryption in transit enabled (HIPAA §164.312(e)(2)(ii))",
+            "EFS encryption in transit required for ePHI transmission security (HIPAA §164.312(e)(2)(ii))",
+            "EfsEncryptionRule",
+            "Enable EFS in-transit encryption to protect PHI during file system access."));
 
         // Network isolation
-        if (ctx.cfc.networkMode() == NetworkMode.PUBLIC) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(e)(1)-Network",
-                "Private network mode required for PHI systems (HIPAA §164.312(e)(1))",
-                "Use 'private-with-nat' to isolate PHI systems from public internet."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(e)(1)-Network",
-                "Private network mode configured for PHI systems (HIPAA §164.312(e)(1))"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(ctx.cfc.networkMode() == NetworkMode.PUBLIC),
+            "HIPAA-164.312(e)(1)-Network",
+            "Private network mode configured for PHI systems (HIPAA §164.312(e)(1))",
+            "Private network mode required for PHI systems (HIPAA §164.312(e)(1))",
+            null,
+            "Use 'private-with-nat' to isolate PHI systems from public internet."));
 
         return rules;
     }
@@ -504,22 +410,15 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
 
         // §164.316(b)(2)(i) - Documentation must be retained for 6 years
         var retentionDays = config.getLogRetentionDays();
-        if (!isRetentionSufficient(retentionDays)) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.316(b)(2)(i)-Retention",
-                "Log retention must be at least 6 years (HIPAA §164.316(b)(2)(i))",
-                "CloudWatchLogGroupRetention",
-                "Log retention must be at least 6 years (2190 days). Current: " +
+        rules.add(ComplianceRule.check(
+            isRetentionSufficient(retentionDays),
+            "HIPAA-164.316(b)(2)(i)-Retention",
+            "Log retention meets 6-year requirement (HIPAA §164.316(b)(2)(i))",
+            "Log retention must be at least 6 years (HIPAA §164.316(b)(2)(i))",
+            "CloudWatchLogGroupRetention",
+            "Log retention must be at least 6 years (2190 days). Current: " +
                 retentionDays.toString() + ". " +
-                "HIPAA requires 6-year retention for all documentation related to HIPAA compliance."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.316(b)(2)(i)-Retention",
-                "Log retention meets 6-year requirement (HIPAA §164.316(b)(2)(i))",
-                "CloudWatchLogGroupRetention"
-            ));
-        }
+                "HIPAA requires 6-year retention for all documentation related to HIPAA compliance."));
 
         return rules;
     }
@@ -558,131 +457,89 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
 
         // §164.312(a)(2)(iv): encryption at rest for EBS, EFS and S3 -- REQUIRED, and previously
         // unchecked here despite generateComplianceReport() printing its status.
-        if (!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()
-                || !config.isS3EncryptionEnabled()) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest",
-                "Encryption at rest required for EBS, EFS and S3 storing ePHI (HIPAA §164.312(a)(2)(iv))",
-                "EbsEncryptionRule",
-                "Enable encryption for all storage volumes and buckets that may hold ePHI."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest",
-                "Encryption at rest enabled for EBS, EFS and S3 (HIPAA §164.312(a)(2)(iv))",
-                "EbsEncryptionRule"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            !(!config.isEbsEncryptionEnabled() || !config.isEfsEncryptionAtRestEnabled()
+                || !config.isS3EncryptionEnabled()),
+            "HIPAA-164.312(a)(2)(iv)-EncryptionAtRest",
+            "Encryption at rest enabled for EBS, EFS and S3 (HIPAA §164.312(a)(2)(iv))",
+            "Encryption at rest required for EBS, EFS and S3 storing ePHI (HIPAA §164.312(a)(2)(iv))",
+            "EbsEncryptionRule",
+            "Enable encryption for all storage volumes and buckets that may hold ePHI."));
 
         // §164.312(a)(2)(iv): CloudWatch Logs may contain ePHI in application log output.
         // Both findings are in STAGING_BLOCKING_RULES, so they must be generated at STAGING too,
         // not just PRODUCTION -- otherwise a disabled setting in STAGING produces no finding at
         // all for the blocking set to catch.
         if (profile == SecurityProfile.PRODUCTION || profile == SecurityProfile.STAGING) {
-            if (!config.isCloudWatchLogsKmsEncryptionEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.312(a)(2)(iv)-LogEncryption",
-                    "CloudWatch log groups must be encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))",
-                    "Enable cloudWatchLogsKmsEncryptionEnabled."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.312(a)(2)(iv)-LogEncryption",
-                    "CloudWatch log groups encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isCloudWatchLogsKmsEncryptionEnabled(),
+                "HIPAA-164.312(a)(2)(iv)-LogEncryption",
+                "CloudWatch log groups encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))",
+                "CloudWatch log groups must be encrypted with a customer-managed KMS key (HIPAA §164.312(a)(2)(iv))",
+                null,
+                "Enable cloudWatchLogsKmsEncryptionEnabled."));
 
             // §164.312(c)(1): audit logs must be tamper-evident.
-            if (!config.isS3ObjectLockEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.312(c)(1)-AuditLogImmutability",
-                    "S3 Object Lock required so audit logs cannot be altered or deleted (HIPAA §164.312(c)(1))",
-                    "Enable S3 Object Lock on the audit-log buckets."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.312(c)(1)-AuditLogImmutability",
-                    "S3 Object Lock enabled on audit-log buckets (HIPAA §164.312(c)(1))"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isS3ObjectLockEnabled(),
+                "HIPAA-164.312(c)(1)-AuditLogImmutability",
+                "S3 Object Lock enabled on audit-log buckets (HIPAA §164.312(c)(1))",
+                "S3 Object Lock required so audit logs cannot be altered or deleted (HIPAA §164.312(c)(1))",
+                null,
+                "Enable S3 Object Lock on the audit-log buckets."));
 
             // §164.308(a)(8): evaluation of security measures -- CloudTrail plus AWS Config
             // together give a record of every change and detect drift from the deployed baseline.
-            if (config.isCloudTrailEnabled() && config.isAwsConfigEnabled()) {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.308(a)(8)-ChangeManagement",
-                    "Change tracking enabled via CloudTrail and AWS Config (HIPAA §164.308(a)(8))"
-                ));
-            } else {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.308(a)(8)-ChangeManagement",
-                    "Change control tracking required (HIPAA §164.308(a)(8))",
-                    "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isCloudTrailEnabled() && config.isAwsConfigEnabled(),
+                "HIPAA-164.308(a)(8)-ChangeManagement",
+                "Change tracking enabled via CloudTrail and AWS Config (HIPAA §164.308(a)(8))",
+                "Change control tracking required (HIPAA §164.308(a)(8))",
+                null,
+                "Enable both CloudTrail and AWS Config to track and detect infrastructure changes."));
         }
 
         // §164.312(a)(1): EC2 instance metadata is a documented credential-theft vector.
         if (runtime == RuntimeType.EC2) {
-            if (!config.isImdsv2Required()) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.312(a)(1)-IMDSv2",
-                    "EC2 instances must require IMDSv2 (HIPAA §164.312(a)(1))",
-                    "Set imdsv2Required=true."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.312(a)(1)-IMDSv2",
-                    "EC2 instances require IMDSv2 tokens (HIPAA §164.312(a)(1))"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isImdsv2Required(),
+                "HIPAA-164.312(a)(1)-IMDSv2",
+                "EC2 instances require IMDSv2 tokens (HIPAA §164.312(a)(1))",
+                "EC2 instances must require IMDSv2 (HIPAA §164.312(a)(1))",
+                null,
+                "Set imdsv2Required=true."));
         }
 
         // §164.308(a)(7)(ii)(B): contingency plan / disaster recovery -- database availability and
         // protection, only when a database was actually provisioned.
         if (profile == SecurityProfile.PRODUCTION && databaseProvisioned) {
-            if (!config.isRdsDatabaseMultiAzEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.308(a)(7)(ii)(B)-DatabaseMultiAZ",
-                    "RDS Multi-AZ required for database availability (HIPAA §164.308(a)(7)(ii)(B))",
-                    "Enable Multi-AZ on the RDS instance."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.308(a)(7)(ii)(B)-DatabaseMultiAZ",
-                    "RDS Multi-AZ enabled for database availability (HIPAA §164.308(a)(7)(ii)(B))"
-                ));
-            }
-            if (!config.isRdsDeletionProtectionEnabled()) {
-                rules.add(ComplianceRule.fail(
-                    "HIPAA-164.310(d)(2)(iii)-DatabaseDeletionProtection",
-                    "RDS deletion protection required to prevent accidental loss of ePHI (HIPAA §164.310(d)(2)(iii))",
-                    "Enable RDS deletion protection."
-                ));
-            } else {
-                rules.add(ComplianceRule.pass(
-                    "HIPAA-164.310(d)(2)(iii)-DatabaseDeletionProtection",
-                    "RDS deletion protection enabled (HIPAA §164.310(d)(2)(iii))"
-                ));
-            }
+            rules.add(ComplianceRule.check(
+                config.isRdsDatabaseMultiAzEnabled(),
+                "HIPAA-164.308(a)(7)(ii)(B)-DatabaseMultiAZ",
+                "RDS Multi-AZ enabled for database availability (HIPAA §164.308(a)(7)(ii)(B))",
+                "RDS Multi-AZ required for database availability (HIPAA §164.308(a)(7)(ii)(B))",
+                null,
+                "Enable Multi-AZ on the RDS instance."));
+            rules.add(ComplianceRule.check(
+                config.isRdsDeletionProtectionEnabled(),
+                "HIPAA-164.310(d)(2)(iii)-DatabaseDeletionProtection",
+                "RDS deletion protection enabled (HIPAA §164.310(d)(2)(iii))",
+                "RDS deletion protection required to prevent accidental loss of ePHI (HIPAA §164.310(d)(2)(iii))",
+                null,
+                "Enable RDS deletion protection."));
         }
 
         // §164.308(a)(7)(ii)(B): high availability, for applications that can run more than one
         // instance -- a single-instance deployment has nothing to make highly available.
         if (profile == SecurityProfile.PRODUCTION) {
             if (Soc2Rules.autoScalingApplies(specSupportsScaling, maxInstances)) {
-                if (!config.isMultiAzEnforced() || !config.isAutoScalingEnabled()) {
-                    rules.add(ComplianceRule.fail(
-                        "HIPAA-164.308(a)(7)(ii)(B)-HighAvailability",
-                        "Multi-AZ deployment and auto-scaling required for high availability (HIPAA §164.308(a)(7)(ii)(B))",
-                        "Deploy across multiple availability zones and enable auto-scaling."
-                    ));
-                } else {
-                    rules.add(ComplianceRule.pass(
-                        "HIPAA-164.308(a)(7)(ii)(B)-HighAvailability",
-                        "Multi-AZ deployment and auto-scaling enabled (HIPAA §164.308(a)(7)(ii)(B))"
-                    ));
-                }
+                rules.add(ComplianceRule.check(
+                    !(!config.isMultiAzEnforced() || !config.isAutoScalingEnabled()),
+                    "HIPAA-164.308(a)(7)(ii)(B)-HighAvailability",
+                    "Multi-AZ deployment and auto-scaling enabled (HIPAA §164.308(a)(7)(ii)(B))",
+                    "Multi-AZ deployment and auto-scaling required for high availability (HIPAA §164.308(a)(7)(ii)(B))",
+                    null,
+                    "Deploy across multiple availability zones and enable auto-scaling."));
             }
         }
 
@@ -703,13 +560,13 @@ public class HipaaRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "SECURITY_MONITORING", "THREAT_DETECTION", "ACCESS_CONTROL", "BACKUP_RECOVERY",
-            "AUTHENTICATION", "NETWORK_SEGMENTATION", "AUDIT_LOGGING", "NETWORK_FLOW_LOGS",
-            "HTTPS_STRICT", "ENCRYPTION_IN_TRANSIT", "LOG_RETENTION",
-            "ENCRYPTION_AT_REST", "CLOUDWATCH_LOGS_KMS_ENCRYPTION", "S3_OBJECT_LOCK",
-            "EC2_IMDSV2", "DATABASE_MULTI_AZ", "DELETION_PROTECTION", "HIGH_AVAILABILITY",
-            "CHANGE_MANAGEMENT"
+        return ClaimedControls.of(
+            SecurityControl.SECURITY_MONITORING, SecurityControl.THREAT_DETECTION, SecurityControl.ACCESS_CONTROL, SecurityControl.BACKUP_RECOVERY,
+            SecurityControl.AUTHENTICATION, SecurityControl.NETWORK_SEGMENTATION, SecurityControl.AUDIT_LOGGING, SecurityControl.NETWORK_FLOW_LOGS,
+            SecurityControl.HTTPS_STRICT, SecurityControl.ENCRYPTION_IN_TRANSIT, SecurityControl.LOG_RETENTION,
+            SecurityControl.ENCRYPTION_AT_REST, SecurityControl.CLOUDWATCH_LOGS_KMS_ENCRYPTION, SecurityControl.S3_OBJECT_LOCK,
+            SecurityControl.EC2_IMDSV2, SecurityControl.DATABASE_MULTI_AZ, SecurityControl.DELETION_PROTECTION, SecurityControl.HIGH_AVAILABILITY,
+            SecurityControl.CHANGE_MANAGEMENT
         );
     }
 

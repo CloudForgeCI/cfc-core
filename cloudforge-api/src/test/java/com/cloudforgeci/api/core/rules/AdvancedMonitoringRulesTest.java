@@ -44,10 +44,8 @@ class AdvancedMonitoringRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestAdvMonDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing advanced monitoring rules
         // Then: Should not throw
@@ -60,10 +58,8 @@ class AdvancedMonitoringRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestAdvMonProd", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -84,10 +80,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("securityHubEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -106,10 +100,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("inspectorEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -129,10 +121,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("macieEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -152,10 +142,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("securityAlertingEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -168,10 +156,8 @@ class AdvancedMonitoringRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestAdvMonValidation", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing advanced monitoring rules
         new AdvancedMonitoringRules().install(ctx);
@@ -194,10 +180,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("customMetricsEnabled", true);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure CloudWatch metrics
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -217,10 +201,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("xraySamplingRate", 0.1);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure X-Ray tracing
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -240,10 +222,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("logInsightsQueries", "ERROR,WARN,INFO");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure Log Insights queries
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -263,10 +243,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("dashboardRefreshInterval", 60);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure dashboards
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -286,10 +264,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("opsItemSnsTopicArn", "arn:aws:sns:us-east-1:123456789012:ops");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure Application Insights
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -309,10 +285,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("errorMetricFilterPattern", "[ERROR]");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure metric filters
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -331,10 +305,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("containerInsightsEnabled", true);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure Container Insights
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -355,10 +327,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("memoryThreshold", 85);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure performance monitoring
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -411,10 +381,8 @@ class AdvancedMonitoringRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestAdvancedMonitoringIdempotent", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing rules multiple times
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -437,10 +405,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("anomalyDetectionBands", 2);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure anomaly detection
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -460,10 +426,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("alarmActionArn", "arn:aws:sns:us-east-1:123456789012:alerts");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure composite alarms
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -482,10 +446,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("ec2DetailedMonitoring", true);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure EC2-specific monitoring
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -508,10 +470,8 @@ class AdvancedMonitoringRulesTest {
         cfcContext.put("latencyThreshold", 500);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When/Then: Should configure custom alarm thresholds
         assertDoesNotThrow(() -> new AdvancedMonitoringRules().install(ctx));
@@ -574,15 +534,11 @@ class AdvancedMonitoringRulesTest {
         // All scenarios pass now - Security Hub is advisory-only
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " securityHub=" + securityHubEnabled +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " securityHub=" + securityHubEnabled +
+                " standards=" + pciDss + "/" + cis + "/" + awsFoundational,
+            "Expected validation to pass for: " + profile + " securityHub=" + securityHubEnabled +
                 " standards=" + pciDss + "/" + cis + "/" + awsFoundational);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " securityHub=" + securityHubEnabled +
-                " standards=" + pciDss + "/" + cis + "/" + awsFoundational);
-        }
     }
 
     /**
@@ -646,13 +602,9 @@ class AdvancedMonitoringRulesTest {
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " inspector=" + inspectorEnabled);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " inspector=" + inspectorEnabled);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " inspector=" + inspectorEnabled,
+            "Expected validation to pass for: " + profile + " inspector=" + inspectorEnabled);
     }
 
     /**
@@ -729,15 +681,11 @@ class AdvancedMonitoringRulesTest {
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " framework=" + complianceFramework +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " framework=" + complianceFramework +
+                " macie=" + macieEnabled + " discovery=" + automatedDiscovery,
+            "Expected validation to pass for: " + profile + " framework=" + complianceFramework +
                 " macie=" + macieEnabled + " discovery=" + automatedDiscovery);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " framework=" + complianceFramework +
-                " macie=" + macieEnabled + " discovery=" + automatedDiscovery);
-        }
     }
 
     /**
@@ -789,15 +737,11 @@ class AdvancedMonitoringRulesTest {
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " dashboard=" + complianceDashboard +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " dashboard=" + complianceDashboard +
+                " alerting=" + securityAlerting,
+            "Expected validation to pass for: " + profile + " dashboard=" + complianceDashboard +
                 " alerting=" + securityAlerting);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " dashboard=" + complianceDashboard +
-                " alerting=" + securityAlerting);
-        }
     }
 
     /**
@@ -904,12 +848,8 @@ class AdvancedMonitoringRulesTest {
         // STAGING and DEV are advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for comprehensive scenario: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for comprehensive scenario: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for comprehensive scenario: " + profile,
+            "Expected validation to pass for comprehensive scenario: " + profile);
     }
 }

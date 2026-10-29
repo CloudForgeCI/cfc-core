@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.enums.SecurityProfile;
 import com.cloudforge.core.enums.RuntimeType;
@@ -40,10 +41,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestSecurityDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing security rules
         // Then: Should not throw
@@ -59,10 +58,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestSecurityStaging", SecurityProfile.STAGING);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         // When: Installing security rules
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
@@ -77,10 +74,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestSecurityProduction", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing security rules
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
@@ -101,10 +96,8 @@ class SecurityRulesTest {
         cfcContext.put("auditManagerEnabled", "false");  // Disable compliance
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing security rules
         // Then: Should skip compliance validation
@@ -123,10 +116,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -144,10 +135,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "HIPAA");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -165,10 +154,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "SOC2");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -186,10 +173,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "GDPR");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -207,10 +192,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS,HIPAA,SOC2,GDPR");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -228,10 +211,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should skip compliance when frameworks is empty
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
@@ -242,10 +223,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestFargate", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -256,10 +235,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestEc2", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
         assertTrue(ctx.securityProfileConfig.get().isPresent());
@@ -270,10 +247,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestDevProfileConfig", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         new SecurityRules().install(ctx);
 
@@ -286,10 +261,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestStagingProfileConfig", SecurityProfile.STAGING);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         new SecurityRules().install(ctx);
 
@@ -302,10 +275,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestProductionProfileConfig", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         new SecurityRules().install(ctx);
 
@@ -318,10 +289,8 @@ class SecurityRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestMultiInstall", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // First install should work
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
@@ -348,10 +317,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "SOC2");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Cross-framework validators (KeyManagement, AdvancedMonitoring, etc.) should be installed
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
@@ -369,10 +336,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
@@ -389,10 +354,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "HIPAA");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }
@@ -409,10 +372,8 @@ class SecurityRulesTest {
         cfcContext.put("complianceFrameworks", "GDPR");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new SecurityRules().install(ctx));
     }

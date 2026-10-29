@@ -82,6 +82,16 @@ public record ComplianceRule(
     }
 
     /**
+     * Create a passing or failing rule from a check result. {@code configRuleId} may be null.
+     */
+    public static ComplianceRule check(boolean passed, String ruleId, String passDescription,
+                                       String failDescription, String configRuleId, String errorMessage) {
+        return passed
+            ? pass(ruleId, passDescription, configRuleId)
+            : fail(ruleId, failDescription, configRuleId, errorMessage);
+    }
+
+    /**
      * Create an ADVISORY-tier finding: the control is off, but the framework doesn't require it, so
      * this must never block synthesis. {@code passed} stays true; {@code recommendation} carries the
      * specific, actionable text for the compliance report.

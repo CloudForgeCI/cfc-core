@@ -869,6 +869,16 @@ public interface SecurityProfileConfiguration {
     boolean isSnsKmsEncryptionEnabled();
 
     /**
+     * Whether the secrets the application factory creates (admin password, license key, cipher
+     * key) are encrypted with a customer-managed KMS key instead of the AWS-managed one.
+     *
+     * @return true if those secrets use a customer-managed key; false by default
+     */
+    default boolean isSecretsKmsEncryptionEnabled() {
+        return false;
+    }
+
+    /**
      * Whether EC2 instances must use IMDSv2 (Instance Metadata Service Version 2).
      *
      * <p>IMDSv2 uses session-based tokens and provides better protection against

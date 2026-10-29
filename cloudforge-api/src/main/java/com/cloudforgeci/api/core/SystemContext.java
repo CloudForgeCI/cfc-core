@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core;
 
 import com.cloudforgeci.api.core.rules.AwsConfigRule;
+import com.cloudforgeci.api.util.NagSuppress;
 import com.cloudforgeci.api.core.rules.ComplianceMatrix;
 import com.cloudforgeci.api.core.rules.Rules;
 import com.cloudforge.core.enums.RuntimeType;
@@ -167,6 +168,9 @@ public final class SystemContext extends Construct {
   // declared env var name). Lets an app's official image complete a non-interactive first-run
   // install instead of stopping at the web installer's manual database-connection step.
   public final Slot<String> autoAdminPasswordSecretArn = new Slot<>();
+
+  /** ARN of the customer-managed KMS key that encrypts the application secrets; unset when they use the AWS-managed key. */
+  public final Slot<String> secretsKmsKeyArn = new Slot<>();
 
   // INTERNAL USE ONLY: Cognito client secret Custom Resource (for CDK dependency tracking)
   // This is used internally to ensure ECS tasks don't start before the secret is created in Secrets Manager.
@@ -956,54 +960,42 @@ public final class SystemContext extends Construct {
     // =====================================================================
 
     // IAM5 - Wildcard permissions are required for many AWS services
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-IAM5")
-        .reason("Wildcard permissions are required for: (1) CloudWatch Logs - log group/stream patterns, " +
+    suppressions.add(NagSuppress.of("AwsSolutions-IAM5",
+        "Wildcard permissions are required for: (1) CloudWatch Logs - log group/stream patterns, " +
                 "(2) S3 bucket operations with object prefixes, (3) SSM parameter paths, " +
                 "(4) AWS Backup cross-resource operations. Permissions are scoped to specific " +
-                "resource patterns where possible.")
-        .build());
+                "resource patterns where possible."));
 
     // IAM4 - AWS managed policies for service roles
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-IAM4")
-        .reason("AWS managed policies are used for service roles where AWS recommends them: " +
+    suppressions.add(NagSuppress.of("AwsSolutions-IAM4",
+        "AWS managed policies are used for service roles where AWS recommends them: " +
                 "(1) AWSBackupServiceRolePolicyForBackup - AWS Backup service role, " +
                 "(2) AWSLambdaBasicExecutionRole - CDK custom resource Lambda functions, " +
                 "(3) AmazonECSTaskExecutionRolePolicy - ECS task execution. " +
-                "These are AWS-maintained and follow least privilege for their service.")
-        .build());
+                "These are AWS-maintained and follow least privilege for their service."));
 
     // L1 - Lambda runtime managed by CDK
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-L1")
-        .reason("Lambda runtime version is managed by CDK AwsCustomResource construct. " +
-                "Runtime updates are applied through CDK version upgrades.")
-        .build());
+    suppressions.add(NagSuppress.of("AwsSolutions-L1",
+        "Lambda runtime version is managed by CDK AwsCustomResource construct. " +
+                "Runtime updates are applied through CDK version upgrades."));
 
     // S1 - S3 server access logs for log buckets
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-S1")
-        .reason("S3 server access logging is disabled for log destination buckets (ALB logs, " +
+    suppressions.add(NagSuppress.of("AwsSolutions-S1",
+        "S3 server access logging is disabled for log destination buckets (ALB logs, " +
                 "CloudTrail logs) to prevent circular dependencies. CloudTrail S3 data events " +
-                "provide audit logging for these buckets.")
-        .build());
+                "provide audit logging for these buckets."));
 
     // EC23 - Security group open access for public-facing services
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-EC23")
-        .reason("Security groups allow 0.0.0.0/0 ingress for: (1) ALB on ports 80/443 for " +
+    suppressions.add(NagSuppress.of("AwsSolutions-EC23",
+        "Security groups allow 0.0.0.0/0 ingress for: (1) ALB on ports 80/443 for " +
                 "public web traffic, (2) EC2 optional ports (SSH, JNLP) when explicitly enabled. " +
-                "Backend instances are protected in private subnets behind ALB.")
-        .build());
+                "Backend instances are protected in private subnets behind ALB."));
 
     // ECS4 - Container Insights (cost optimization for non-production)
     if (security != SecurityProfile.PRODUCTION) {
-      suppressions.add(NagPackSuppression.builder()
-          .id("AwsSolutions-ECS4")
-          .reason("CloudWatch Container Insights is disabled for DEV/STAGING to reduce costs. " +
-                  "Production deployments enable Container Insights for operational visibility.")
-          .build());
+      suppressions.add(NagSuppress.of("AwsSolutions-ECS4",
+          "CloudWatch Container Insights is disabled for DEV/STAGING to reduce costs. " +
+                  "Production deployments enable Container Insights for operational visibility."));
     }
 
     // =====================================================================
@@ -1014,160 +1006,112 @@ public final class SystemContext extends Construct {
         "tightly scoped to specific resources. This approach provides better security than managed " +
         "policies for application-specific access patterns. Permissions follow least privilege.";
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-IAMNoInlinePolicy")
-        .reason(inlinePolicyReason)
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-IAMNoInlinePolicy",
+        inlinePolicyReason));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-CloudWatchLogGroupEncrypted")
-        .reason("CloudWatch Log Groups use AWS-managed encryption by default. KMS encryption " +
-                "is configurable via security profile for environments requiring customer-managed keys.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-CloudWatchLogGroupEncrypted",
+        "CloudWatch Log Groups use AWS-managed encryption by default. KMS encryption " +
+                "is configurable via security profile for environments requiring customer-managed keys."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-VPCSubnetAutoAssignPublicIpDisabled")
-        .reason("Public subnets require auto-assign public IP for resources that need direct " +
-                "internet access (ALB, NAT gateways). Private subnets do not auto-assign public IPs.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-VPCSubnetAutoAssignPublicIpDisabled",
+        "Public subnets require auto-assign public IP for resources that need direct " +
+                "internet access (ALB, NAT gateways). Private subnets do not auto-assign public IPs."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-VPCNoUnrestrictedRouteToIGW")
-        .reason("Public subnets require routes to Internet Gateway for ALB and NAT gateway " +
-                "functionality. Private subnets route through NAT gateways, not directly to IGW.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-VPCNoUnrestrictedRouteToIGW",
+        "Public subnets require routes to Internet Gateway for ALB and NAT gateway " +
+                "functionality. Private subnets route through NAT gateways, not directly to IGW."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-ALBHttpDropInvalidHeaderEnabled")
-        .reason("ALB drop invalid headers is configured via configureAlbSecurity() method. " +
-                "This setting may not be detected by CDK-nag during synthesis.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-ALBHttpDropInvalidHeaderEnabled",
+        "ALB drop invalid headers is configured via configureAlbSecurity() method. " +
+                "This setting may not be detected by CDK-nag during synthesis."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-ELBLoggingEnabled")
-        .reason("ELB logging is enabled for production security profiles. DEV/STAGING may " +
-                "disable logging for cost optimization. Enable via albAccessLogging config.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-ELBLoggingEnabled",
+        "ELB logging is enabled for production security profiles. DEV/STAGING may " +
+                "disable logging for cost optimization. Enable via albAccessLogging config."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-LambdaConcurrency")
-        .reason("CDK AwsCustomResource Lambda functions are short-lived and don't require " +
-                "concurrency limits. They execute only during CloudFormation operations.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-LambdaConcurrency",
+        "CDK AwsCustomResource Lambda functions are short-lived and don't require " +
+                "concurrency limits. They execute only during CloudFormation operations."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-LambdaDLQ")
-        .reason("CDK AwsCustomResource Lambda functions report errors through CloudFormation. " +
-                "DLQ is not needed as failures are visible in stack events.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-LambdaDLQ",
+        "CDK AwsCustomResource Lambda functions report errors through CloudFormation. " +
+                "DLQ is not needed as failures are visible in stack events."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-LambdaInsideVPC")
-        .reason("CDK AwsCustomResource Lambda functions only make AWS API calls and don't " +
-                "require VPC access. Running in VPC would add unnecessary complexity.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-LambdaInsideVPC",
+        "CDK AwsCustomResource Lambda functions only make AWS API calls and don't " +
+                "require VPC access. Running in VPC would add unnecessary complexity."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-ELBv2ACMCertificateRequired")
-        .reason("Private CA certificates are used for OIDC authentication when no custom domain " +
+    suppressions.add(NagSuppress.of("HIPAA.Security-ELBv2ACMCertificateRequired",
+        "Private CA certificates are used for OIDC authentication when no custom domain " +
                 "is configured. For HIPAA production environments, configure a custom domain with " +
                 "ACM public certificate. Private CA certificates enable development/testing without " +
-                "requiring domain registration.")
-        .build());
+                "requiring domain registration."));
 
     // =====================================================================
     // PCI.DSS.321 Rules
     // =====================================================================
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-IAMNoInlinePolicy")
-        .reason(inlinePolicyReason)
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-IAMNoInlinePolicy",
+        inlinePolicyReason));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-CloudWatchLogGroupEncrypted")
-        .reason("CloudWatch Log Groups use AWS-managed encryption by default. KMS encryption " +
-                "is configurable via security profile for PCI-DSS environments.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-CloudWatchLogGroupEncrypted",
+        "CloudWatch Log Groups use AWS-managed encryption by default. KMS encryption " +
+                "is configurable via security profile for PCI-DSS environments."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-VPCSubnetAutoAssignPublicIpDisabled")
-        .reason("Public subnets require auto-assign public IP for ALB and NAT gateways. " +
-                "Cardholder data environment uses private subnets without public IPs.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-VPCSubnetAutoAssignPublicIpDisabled",
+        "Public subnets require auto-assign public IP for ALB and NAT gateways. " +
+                "Cardholder data environment uses private subnets without public IPs."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-VPCNoUnrestrictedRouteToIGW")
-        .reason("Public subnets require IGW routes for ALB traffic. Private subnets with " +
-                "cardholder data route through NAT, providing network segmentation per Req 1.3.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-VPCNoUnrestrictedRouteToIGW",
+        "Public subnets require IGW routes for ALB traffic. Private subnets with " +
+                "cardholder data route through NAT, providing network segmentation per Req 1.3."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-ALBHttpDropInvalidHeaderEnabled")
-        .reason("ALB drop invalid headers is configured via configureAlbSecurity(). " +
-                "Complies with PCI-DSS Req 4.1 for secure transmission.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-ALBHttpDropInvalidHeaderEnabled",
+        "ALB drop invalid headers is configured via configureAlbSecurity(). " +
+                "Complies with PCI-DSS Req 4.1 for secure transmission."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-ELBLoggingEnabled")
-        .reason("ELB logging is enabled for production per PCI-DSS Req 10. Non-production " +
-                "environments may disable for cost optimization.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-ELBLoggingEnabled",
+        "ELB logging is enabled for production per PCI-DSS Req 10. Non-production " +
+                "environments may disable for cost optimization."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-LambdaInsideVPC")
-        .reason("CDK custom resource Lambdas make AWS API calls only and don't access " +
-                "cardholder data environment. VPC placement not required for PCI scope.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-LambdaInsideVPC",
+        "CDK custom resource Lambdas make AWS API calls only and don't access " +
+                "cardholder data environment. VPC placement not required for PCI scope."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-SecretsManagerUsingKMSKey")
-        .reason("Secrets Manager uses AWS-managed encryption by default. Customer-managed KMS keys " +
+    suppressions.add(NagSuppress.of("PCI.DSS.321-SecretsManagerUsingKMSKey",
+        "Secrets Manager uses AWS-managed encryption by default. Customer-managed KMS keys " +
                 "can be configured for production PCI-DSS environments requiring key management control. " +
-                "Default encryption meets PCI-DSS Req 3.4 for encryption at rest.")
-        .build());
+                "Default encryption meets PCI-DSS Req 3.4 for encryption at rest."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-RDSLoggingEnabled")
-        .reason("RDS logging is configured based on database engine type. PostgreSQL/MySQL enable " +
+    suppressions.add(NagSuppress.of("PCI.DSS.321-RDSLoggingEnabled",
+        "RDS logging is configured based on database engine type. PostgreSQL/MySQL enable " +
                 "appropriate log exports. Some log types (e.g., upgrade) may not be applicable to all " +
                 "configurations. Audit logging per PCI-DSS Req 10 is ensured via CloudTrail and " +
-                "engine-specific logs.")
-        .build());
+                "engine-specific logs."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("PCI.DSS.321-ELBv2ACMCertificateRequired")
-        .reason("Private CA certificates are used for OIDC authentication when no custom domain " +
-                "is configured. For PCI-DSS production, configure a custom domain with ACM public certificate.")
-        .build());
+    suppressions.add(NagSuppress.of("PCI.DSS.321-ELBv2ACMCertificateRequired",
+        "Private CA certificates are used for OIDC authentication when no custom domain " +
+                "is configured. For PCI-DSS production, configure a custom domain with ACM public certificate."));
 
     // HIPAA suppressions
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-SecretsManagerRotationEnabled")
-        .reason("Secrets rotation is application-dependent and configured per deployment requirements. " +
-                "Applications using database credentials can enable rotation through deployment config.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-SecretsManagerRotationEnabled",
+        "Secrets rotation is application-dependent and configured per deployment requirements. " +
+                "Applications using database credentials can enable rotation through deployment config."));
 
     // Same finding as HIPAA.Security-SecretsManagerRotationEnabled above, under the AWS Solutions
     // pack's rule ID. That pack loads whenever any compliance framework is enabled, so stacks with
     // only SOC2/PCI-DSS/GDPR would otherwise fail synthesis on this finding.
-    suppressions.add(NagPackSuppression.builder()
-        .id("AwsSolutions-SMG4")
-        .reason("Secrets rotation is application-dependent and configured per deployment requirements. " +
-                "Applications using database credentials can enable rotation through deployment config.")
-        .build());
+    suppressions.add(NagSuppress.of("AwsSolutions-SMG4",
+        "Secrets rotation is application-dependent and configured per deployment requirements. " +
+                "Applications using database credentials can enable rotation through deployment config."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-SecretsManagerUsingKMSKey")
-        .reason("Secrets Manager uses AWS-managed encryption by default. Customer-managed KMS keys " +
-                "can be configured for HIPAA environments requiring key management control.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-SecretsManagerUsingKMSKey",
+        "Secrets Manager uses AWS-managed encryption by default. Customer-managed KMS keys " +
+                "can be configured for HIPAA environments requiring key management control."));
 
-    suppressions.add(NagPackSuppression.builder()
-        .id("HIPAA.Security-RDSLoggingEnabled")
-        .reason("RDS logging is configured based on database engine type. Some log types (e.g., upgrade) " +
-                "may not be applicable. Audit logging per HIPAA is ensured via CloudTrail and engine-specific logs.")
-        .build());
+    suppressions.add(NagSuppress.of("HIPAA.Security-RDSLoggingEnabled",
+        "RDS logging is configured based on database engine type. Some log types (e.g., upgrade) " +
+                "may not be applicable. Audit logging per HIPAA is ensured via CloudTrail and engine-specific logs."));
 
     NagSuppressions.addStackSuppressions(stack, suppressions, true);
     LOG.info("Applied " + suppressions.size() + " stack-level CDK-nag suppressions for " + security + " profile");

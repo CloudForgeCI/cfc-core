@@ -65,10 +65,8 @@ class PciDssRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw (rules are only enforced for PRODUCTION)
@@ -81,10 +79,8 @@ class PciDssRulesTest {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciProd", null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
@@ -100,10 +96,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAdvisory", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules in ADVISORY mode
         // Then: Should not throw (violations logged as warnings)
@@ -119,10 +113,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciEnforce", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules in ENFORCE mode
         // Then: Should not throw during installation
@@ -142,10 +134,8 @@ class PciDssRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         // When: Installing PCI-DSS rules
         // Then: Should not enforce (only PRODUCTION enforces PCI-DSS)
@@ -161,10 +151,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciEc2", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
@@ -177,10 +165,8 @@ class PciDssRulesTest {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciFargate", null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw
@@ -196,10 +182,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciMulti", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules
         // Then: Should not throw (PCI-DSS rules install independently)
@@ -215,10 +199,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPrivate", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules
         // Then: Should pass network security validation
@@ -231,10 +213,8 @@ class PciDssRulesTest {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciMultipleInstall", null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules multiple times
         new PciDssRules().install(ctx);
@@ -254,10 +234,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciEncryption", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -272,10 +250,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAccessLog", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -290,10 +266,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciNetSeg", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -308,10 +282,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciVulnScan", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -327,10 +299,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciSecureTrans", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -345,10 +315,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAntiMalware", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -363,10 +331,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciSecureDev", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -381,10 +347,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAccessCtrl", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -399,10 +363,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPhysical", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -418,10 +380,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciMonitoring", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -436,10 +396,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPolicy", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -472,10 +430,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciComplete", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -486,10 +442,8 @@ class PciDssRulesTest {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciMinimal", null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -531,10 +485,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciCDE", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -550,10 +502,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciFirewall", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -568,10 +518,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciDefaults", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -587,10 +535,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciRetention", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -606,10 +552,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciKeyMgmt", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -626,10 +570,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciStrongTLS", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -644,10 +586,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPanMask", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -664,10 +604,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciSDLC", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -683,10 +621,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPatch", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -702,10 +638,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciLeastPriv", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -720,10 +654,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciUniqueId", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -739,10 +671,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPassword", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -758,10 +688,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciMFA", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -777,10 +705,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciSession", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -797,10 +723,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAudit", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -816,10 +740,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciLogProtect", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -835,10 +757,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciLogReview", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -854,10 +774,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciLogRetention", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -873,10 +791,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPenTest", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -892,10 +808,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciChangeDetect", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -911,10 +825,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAwareness", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -930,10 +842,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciIncident", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -949,10 +859,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciThirdParty", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -968,10 +876,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciQuarterlyScan", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -987,10 +893,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciWireless", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1001,10 +905,8 @@ class PciDssRulesTest {
         App app = new App();
         Stack stack = createPciDssStack(app, "TestPciIdempotent", null);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing PCI-DSS rules multiple times
         new PciDssRules().install(ctx);
@@ -1086,10 +988,8 @@ class PciDssRulesTest {
             "customConfigurationApplied", "false"
         ));
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         // This should pass STAGING profile rules
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1110,10 +1010,8 @@ class PciDssRulesTest {
         cfcContext.put("securityHardeningApplied", "false");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1133,10 +1031,8 @@ class PciDssRulesTest {
         cfcContext.put("unnecessaryServicesDisabled", "false");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1156,10 +1052,8 @@ class PciDssRulesTest {
         cfcContext.put("minimalBaseImageUsed", "false");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1173,10 +1067,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciInventory", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1248,10 +1140,8 @@ class PciDssRulesTest {
         cfcContext.put("fqdn", "pci.example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -1269,10 +1159,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciPublicNoNat", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance violations
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1288,10 +1176,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAuthNone", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance violations
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1310,10 +1196,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciJenkinsOidc", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw - SSO with MFA is valid
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1333,10 +1217,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciSsoArn", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should pass MFA validation via SSO
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1361,10 +1243,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance violation for missing TLS
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1387,10 +1267,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciAllPass", additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should pass all validations and return empty error list
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1415,10 +1293,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1443,10 +1319,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1471,10 +1345,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1499,10 +1371,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1527,10 +1397,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1555,10 +1423,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1583,10 +1449,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1611,10 +1475,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should not throw, but will generate compliance warning
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1639,10 +1501,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // VPC should be empty - will generate compliance violation
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1666,10 +1526,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // ALB security group should be empty - will generate compliance violation
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1693,10 +1551,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // EFS security group should be empty - will generate compliance violation
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1721,10 +1577,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should generate compliance warning for disabled EBS encryption
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1749,10 +1603,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should generate compliance warning for disabled EFS at-rest encryption
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1777,10 +1629,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should generate compliance warning for disabled S3 encryption
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1805,10 +1655,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Should generate compliance warning for missing TLS certificate
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -1871,11 +1719,8 @@ class PciDssRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestPciEnc", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
@@ -1887,13 +1732,9 @@ class PciDssRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing encryption: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing encryption: " + profile,
+            "Expected validation to pass: " + profile);
     }
 
     /**
@@ -1948,11 +1789,8 @@ class PciDssRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestPciLog", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
@@ -1964,13 +1802,9 @@ class PciDssRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing audit logging: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing audit logging: " + profile,
+            "Expected validation to pass: " + profile);
     }
 
     /**
@@ -2025,11 +1859,8 @@ class PciDssRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestPciMon", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
@@ -2041,13 +1872,9 @@ class PciDssRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing security monitoring: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing security monitoring: " + profile,
+            "Expected validation to pass: " + profile);
     }
 
     /**
@@ -2104,11 +1931,8 @@ class PciDssRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestPciRet", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
@@ -2120,13 +1944,9 @@ class PciDssRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for insufficient retention: " + days + " days");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for retention: " + days + " days");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for insufficient retention: " + days + " days",
+            "Expected validation to pass for retention: " + days + " days");
     }
 
     /**
@@ -2204,10 +2024,8 @@ class PciDssRulesTest {
             "TestPciAuth" + authMode.replace("-", "") + cognitoMfa + (ssoArn != null && !ssoArn.isEmpty()),
             additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2231,10 +2049,8 @@ class PciDssRulesTest {
 
         Stack stack = createPciDssStack(app, "TestPciNetwork" + networkMode.replace("-", ""), additionalContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2265,10 +2081,8 @@ class PciDssRulesTest {
 
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // Both modes should not throw - ADVISORY logs warnings, ENFORCE logs errors
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
@@ -2360,11 +2174,8 @@ class PciDssRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestPciNet", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
@@ -2376,13 +2187,9 @@ class PciDssRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for non-compliant network mode: " + networkMode);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for network mode: " + networkMode);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for non-compliant network mode: " + networkMode,
+            "Expected validation to pass for network mode: " + networkMode);
     }
 
     /**
@@ -2427,10 +2234,8 @@ class PciDssRulesTest {
         }
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2451,10 +2256,8 @@ class PciDssRulesTest {
         Stack stack = createPciDssStack(app, "TestPciWaf" + wafEnabled + complianceMode,
                 Map.of("wafEnabled", String.valueOf(wafEnabled), "complianceMode", complianceMode));
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2510,10 +2313,8 @@ class PciDssRulesTest {
         }
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2552,10 +2353,8 @@ class PciDssRulesTest {
         cfcContext.put("complianceMode", complianceMode);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2585,10 +2384,8 @@ class PciDssRulesTest {
         Stack stack = createPciDssStack(app, "TestPciRet" + retentionDays + complianceMode,
                 Map.of("logRetentionDays", String.valueOf(retentionDays), "complianceMode", complianceMode));
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2627,10 +2424,8 @@ class PciDssRulesTest {
         cfcContext.put("complianceMode", complianceMode);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -2675,10 +2470,8 @@ class PciDssRulesTest {
         cfcContext.put("fqdn", "jenkins.example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new PciDssRules().install(ctx));
     }
@@ -3480,22 +3273,15 @@ class PciDssRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestWafEnforcement", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected WAF validation to fail for: " + profile + " with wafEnabled=" + wafEnabled);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected WAF validation to pass: " + profile + " with wafEnabled=" + wafEnabled);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected WAF validation to fail for: " + profile + " with wafEnabled=" + wafEnabled,
+            "Expected WAF validation to pass: " + profile + " with wafEnabled=" + wafEnabled);
     }
 
     @ParameterizedTest
@@ -3551,22 +3337,15 @@ class PciDssRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestFlowLogs", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected flow logs validation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected flow logs validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected flow logs validation to fail for: " + profile,
+            "Expected flow logs validation to pass: " + profile);
     }
 
     @ParameterizedTest
@@ -3626,22 +3405,15 @@ class PciDssRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestLogRetention", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected log retention validation to fail for: " + profile + " with " + retentionDays + " days");
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected log retention validation to pass: " + profile + " with " + retentionDays + " days");
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected log retention validation to fail for: " + profile + " with " + retentionDays + " days",
+            "Expected log retention validation to pass: " + profile + " with " + retentionDays + " days");
     }
 
     @ParameterizedTest
@@ -3703,22 +3475,15 @@ class PciDssRulesTest {
 
         // Note: TestInfrastructureBuilder uses JENKINS_SERVICE topology by default
         // topologyType parameter is ignored for this test (all topologies use same validation)
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestAppTypes", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + topology + " on " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + topology + " on " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + topology + " on " + profile,
+            "Expected validation to pass: " + topology + " on " + profile);
     }
 
     @ParameterizedTest
@@ -3774,21 +3539,14 @@ class PciDssRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestMultiViolation", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         builder.createMockHttpsListener();
         new SecurityRules().install(builder.getSystemContext());
         new PciDssRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected multi-violation validation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected multi-violation validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected multi-violation validation to fail for: " + profile,
+            "Expected multi-violation validation to pass: " + profile);
     }
 }

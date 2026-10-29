@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.rules;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -40,10 +41,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopologyJenkinsSN", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         // When: Installing topology rules
         // Then: Should not throw
@@ -56,10 +55,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopologyJenkinsService", SecurityProfile.STAGING);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         // When: Installing topology rules
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
@@ -74,10 +71,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopologyS3Website", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing topology rules
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
@@ -92,10 +87,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopologyWiring", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing topology rules
         // Then: Should not throw (wiring is deferred via ctx.once())
@@ -135,10 +128,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopologyValidation", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing topology rules
         new TopologyRules().install(ctx);
@@ -177,10 +168,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestMultiInstallTopology", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // First install should work
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
@@ -194,10 +183,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJSNEC2", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
@@ -208,10 +195,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJSFargate", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
@@ -222,10 +207,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3WebsiteDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertNotNull(ctx.getNode());
@@ -252,10 +235,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJSNProduction", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
@@ -265,10 +246,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestJSStaging", SecurityProfile.STAGING);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
@@ -278,10 +257,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestS3Production", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.S3_WEBSITE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.S3_WEBSITE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
@@ -314,10 +291,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopoValidationExec", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         new TopologyRules().install(ctx);
 
@@ -330,10 +305,8 @@ class TopologyRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestTopoDeferredWiring", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
     }
@@ -362,10 +335,8 @@ class TopologyRulesTest {
         Stack stack = createTestStack(app, "TestCmsTopoEc2Staging", SecurityProfile.STAGING);
         stack.getNode().setContext("cfc", buildCmsContext("TestCmsTopoEc2Staging", SecurityProfile.STAGING, "drupal"));
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.CMS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.CMS_SERVICE, RuntimeType.EC2, SecurityProfile.STAGING);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertTrue(ctx.applicationSpec.get().isPresent(), "applicationSpec must be set for CMS_SERVICE topology");
@@ -378,10 +349,8 @@ class TopologyRulesTest {
         Stack stack = createTestStack(app, "TestCmsTopoProd", SecurityProfile.PRODUCTION);
         stack.getNode().setContext("cfc", buildCmsContext("TestCmsTopoProd", SecurityProfile.PRODUCTION, "magento"));
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.CMS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.CMS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new TopologyRules().install(ctx));
         assertTrue(ctx.applicationSpec.get().isPresent(), "applicationSpec must be set for CMS_SERVICE topology");

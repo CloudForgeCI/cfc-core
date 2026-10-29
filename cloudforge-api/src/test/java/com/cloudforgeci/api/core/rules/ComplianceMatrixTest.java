@@ -262,4 +262,29 @@ class ComplianceMatrixTest {
             mappings.put("TEST", FrameworkRequirement.required("Test requirement"));
         });
     }
+
+    @Test
+    void testEveryControlHasADescriptionAndAKnownFrameworkMapping() {
+        for (var control : ComplianceMatrix.SecurityControl.values()) {
+            assertFalse(control.getDescription().isBlank(), control + " has no description");
+            for (var entry : control.getFrameworkMappings().entrySet()) {
+                assertTrue(ComplianceMatrix.knownFrameworkKeys().contains(entry.getKey()),
+                    control + " maps unknown framework " + entry.getKey());
+                assertFalse(entry.getValue().citation().isBlank(), control + "/" + entry.getKey() + " has no citation");
+            }
+        }
+    }
+
+    @Test
+    void testMappingDataIsLoadedFromTheResourceFile() {
+        var atRest = ComplianceMatrix.SecurityControl.ENCRYPTION_AT_REST.getRequirement("PCI-DSS");
+        assertEquals("Req 3.4 - Render PAN unreadable", atRest.citation());
+        assertEquals(ComplianceMatrix.RequirementLevel.REQUIRED, atRest.level());
+
+        var strict = ComplianceMatrix.SecurityControl.HTTPS_STRICT.getRequirement("HIPAA");
+        assertEquals(ComplianceMatrix.RequirementLevel.ADVISORY, strict.level());
+
+        assertEquals(ComplianceMatrix.RequirementLevel.NOT_APPLICABLE,
+            ComplianceMatrix.SecurityControl.HTTPS_STRICT.getRequirement("NO-SUCH-FRAMEWORK").level());
+    }
 }

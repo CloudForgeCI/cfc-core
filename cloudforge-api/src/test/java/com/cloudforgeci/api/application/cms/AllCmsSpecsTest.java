@@ -337,4 +337,16 @@ class AllCmsSpecsTest {
         var env = spec.getOidcIntegration().getEnvironmentVariables(config);
         assertNotNull(env);
     }
+
+    @Test
+    void mediaWikiMountsOnlyItsUploadsSoTheImagesCodeStaysVisible() {
+        MediaWikiApplicationSpec spec = new MediaWikiApplicationSpec();
+
+        assertEquals("/var/www/html/images", spec.containerDataPath());
+        assertEquals("/var/www/html", spec.documentRoot(), "Apache still serves the image's own files");
+        assertTrue(spec.mediaUploadPath().startsWith(spec.containerDataPath()),
+            "uploads land on the persisted volume");
+        assertFalse(spec.documentRoot().startsWith(spec.containerDataPath()),
+            "the volume does not cover the document root");
+    }
 }

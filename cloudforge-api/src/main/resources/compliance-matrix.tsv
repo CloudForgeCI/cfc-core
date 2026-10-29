@@ -1,0 +1,348 @@
+# Security controls and the framework requirement each maps to.
+# control<TAB>description  (one line per control)
+# control<TAB>framework<TAB>level<TAB>citation  (one line per mapping)
+ENCRYPTION_AT_REST	Encryption of data at rest (EBS, EFS, S3)
+ENCRYPTION_IN_TRANSIT	Encryption of data in transit (TLS/SSL, EFS)
+HTTPS_STRICT	HTTPS-only mode (disable HTTP listener when SSL enabled)
+NETWORK_SEGMENTATION	Network segmentation (VPC, private subnets, security groups)
+ACCESS_CONTROL	Role-based access control (IAM, least privilege)
+AUTHENTICATION	User authentication (SSO, OIDC, MFA)
+AUDIT_LOGGING	Audit logging with CloudTrail, VPC Flow Logs, and ALB access logs
+LOG_RETENTION	Long-term log retention (2-6 years)
+SECURITY_MONITORING	Continuous security monitoring (CloudWatch, AWS Config)
+THREAT_DETECTION	Threat detection system (GuardDuty)
+SECURITY_HUB	Centralized security findings (AWS Security Hub)
+VULNERABILITY_SCANNING	Vulnerability scanning (AWS Inspector)
+SENSITIVE_DATA_DISCOVERY	Sensitive data discovery (AWS Macie)
+WAF_PROTECTION	Web Application Firewall (AWS WAF)
+BACKUP_RECOVERY	Automated backup and disaster recovery
+HIGH_AVAILABILITY	High availability configuration (Multi-AZ, auto-scaling)
+CHANGE_MANAGEMENT	Infrastructure as Code and change tracking
+VULNERABILITY_MANAGEMENT	Configuration compliance monitoring (AWS Config)
+KMS_KEY_ROTATION	Automatic KMS key rotation (annual)
+CERTIFICATE_EXPIRATION_MONITORING	Certificate expiration monitoring (CloudWatch alarms)
+SECRETS_MANAGER	Secrets Manager for credentials (databases, API keys)
+SECRETS_ROTATION	Automatic secrets rotation (90 days or less)
+DATABASE_MULTI_AZ	Database Multi-AZ deployment (RDS, Aurora)
+DATABASE_PITR	Database point-in-time recovery (DynamoDB, RDS)
+NETWORK_FLOW_LOGS	VPC Flow Logs for network traffic monitoring
+AUDIT_MANAGER	Continuous audit evidence collection (AWS Audit Manager)
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	KMS encryption for CloudWatch Logs (at-rest encryption)
+CLOUDTRAIL_INSIGHTS	CloudTrail Insights for anomaly detection in API activity
+ROUTE53_QUERY_LOGGING	Route53 DNS query logging for network visibility
+S3_OBJECT_LOCK	S3 Object Lock for audit trail immutability
+ROOT_ACCOUNT_PROTECTION	Root account MFA and access key protection
+CREDENTIAL_ROTATION	Access key rotation and unused credential management
+DATABASE_ACCESS_CONTROL	Database public access restriction and IAM authentication
+CONTAINER_SECURITY	EKS cluster endpoint protection and secrets encryption
+API_SECURITY	API Gateway logging, SSL enforcement, and WAF protection
+CDN_SECURITY	CloudFront HTTPS enforcement and WAF association
+INSTANCE_METADATA_SECURITY	EC2 IMDSv2 enforcement for metadata service protection
+CERTIFICATE_MANAGEMENT	ACM certificate expiration monitoring and lifecycle management
+LAMBDA_SECURITY	Lambda function public access restriction and VPC configuration
+DATABASE_LOGGING	RDS database audit logging and activity monitoring
+DELETION_PROTECTION	RDS and resource deletion protection for data integrity
+SNS_KMS_ENCRYPTION	SNS topic encryption with customer-managed KMS keys
+EC2_IMDSV2	EC2 Instance Metadata Service Version 2 (IMDSv2) enforcement
+
+ENCRYPTION_AT_REST	PCI-DSS	REQUIRED	Req 3.4 - Render PAN unreadable
+ENCRYPTION_AT_REST	HIPAA	REQUIRED	§164.312(a)(2)(iv) - Encryption and Decryption
+ENCRYPTION_AT_REST	SOC2	REQUIRED	CC6.1 - Logical and Physical Access Controls
+ENCRYPTION_AT_REST	GDPR	REQUIRED	Art. 32(1)(a) - Pseudonymization and Encryption
+ENCRYPTION_AT_REST	NIST	REQUIRED	SC-28 - Protection of Information at Rest
+ENCRYPTION_AT_REST	FEDRAMP	REQUIRED	SC-28 - Protection of Information at Rest
+ENCRYPTION_AT_REST	ISO-27001	REQUIRED	A.8.24 - Use of Cryptography (data at rest)
+ENCRYPTION_IN_TRANSIT	PCI-DSS	REQUIRED	Req 4.1 - Encrypt transmission of cardholder data
+ENCRYPTION_IN_TRANSIT	HIPAA	REQUIRED	§164.312(e)(1) - Transmission Security
+ENCRYPTION_IN_TRANSIT	SOC2	REQUIRED	CC6.7 - Data Transmission Security
+ENCRYPTION_IN_TRANSIT	GDPR	REQUIRED	Art. 32(1)(a) - Encryption of Personal Data
+ENCRYPTION_IN_TRANSIT	NIST	REQUIRED	SC-8 - Transmission Confidentiality and Integrity
+ENCRYPTION_IN_TRANSIT	FEDRAMP	REQUIRED	SC-8 - Transmission Confidentiality and Integrity
+ENCRYPTION_IN_TRANSIT	ISO-27001	REQUIRED	A.8.24 - Use of Cryptography (data in transit)
+HTTPS_STRICT	PCI-DSS	REQUIRED	Req 4.1 - Strong cryptography for transmission
+HTTPS_STRICT	HIPAA	ADVISORY	§164.312(e)(2)(ii) - Encryption mechanism
+HTTPS_STRICT	SOC2	ADVISORY	CC6.7 - Minimize attack surface
+HTTPS_STRICT	GDPR	ADVISORY	Art. 32(1)(a) - State of the art encryption
+HTTPS_STRICT	NIST	REQUIRED	SC-8(1) - Cryptographic Protection
+HTTPS_STRICT	FEDRAMP	REQUIRED	SC-8(1) - Cryptographic Protection
+HTTPS_STRICT	ISO-27001	ADVISORY	A.8.24 - Use of Cryptography (enforce encrypted transport)
+NETWORK_SEGMENTATION	PCI-DSS	REQUIRED	Req 1.3 - Prohibit direct public access to cardholder data
+NETWORK_SEGMENTATION	HIPAA	REQUIRED	§164.312(e)(1) - Network Controls
+NETWORK_SEGMENTATION	SOC2	REQUIRED	CC6.6 - Network Segmentation
+NETWORK_SEGMENTATION	GDPR	REQUIRED	Art. 32(1)(b) - Confidentiality
+NETWORK_SEGMENTATION	NIST	REQUIRED	SC-7 - Boundary Protection
+NETWORK_SEGMENTATION	FEDRAMP	REQUIRED	SC-7 - Boundary Protection
+NETWORK_SEGMENTATION	ISO-27001	REQUIRED	A.8.22 - Segregation of Networks
+ACCESS_CONTROL	PCI-DSS	REQUIRED	Req 7.1 - Limit access by business need to know
+ACCESS_CONTROL	HIPAA	REQUIRED	§164.312(a)(1) - Access Control
+ACCESS_CONTROL	SOC2	REQUIRED	CC6.1 - Logical Access Controls
+ACCESS_CONTROL	GDPR	REQUIRED	Art. 32(1)(b) - Confidentiality
+ACCESS_CONTROL	NIST	REQUIRED	AC-3 - Access Enforcement
+ACCESS_CONTROL	FEDRAMP	REQUIRED	AC-3 - Access Enforcement
+ACCESS_CONTROL	ISO-27001	REQUIRED	A.5.15 - Access Control
+AUTHENTICATION	PCI-DSS	REQUIRED	Req 8.3 - Multi-factor authentication
+AUTHENTICATION	HIPAA	REQUIRED	§164.312(d) - Person or Entity Authentication
+AUTHENTICATION	SOC2	REQUIRED	CC6.2 - User Authentication
+AUTHENTICATION	GDPR	REQUIRED	Art. 32(1)(b) - Ability to ensure confidentiality
+AUTHENTICATION	NIST	REQUIRED	IA-2 - Identification and Authentication
+AUTHENTICATION	FEDRAMP	REQUIRED	IA-2 - Identification and Authentication
+AUTHENTICATION	ISO-27001	REQUIRED	A.8.5 - Secure Authentication
+AUDIT_LOGGING	PCI-DSS	REQUIRED	Req 10.2 - Automated audit trails
+AUDIT_LOGGING	HIPAA	REQUIRED	§164.312(b) - Audit Controls
+AUDIT_LOGGING	SOC2	REQUIRED	CC7.2 - System Monitoring
+AUDIT_LOGGING	GDPR	REQUIRED	Art. 30 - Records of Processing Activities
+AUDIT_LOGGING	NIST	REQUIRED	AU-2 - Audit Events
+AUDIT_LOGGING	FEDRAMP	REQUIRED	AU-2 - Audit Events
+AUDIT_LOGGING	ISO-27001	REQUIRED	A.8.15 - Logging
+LOG_RETENTION	PCI-DSS	REQUIRED	Req 10.7 - Retain audit trail for at least one year
+LOG_RETENTION	HIPAA	REQUIRED	§164.316(b)(2)(i) - Retain documentation for 6 years
+LOG_RETENTION	SOC2	REQUIRED	CC7.2 - Log retention for forensic analysis
+LOG_RETENTION	GDPR	ADVISORY	Art. 30 - Maintain processing records
+LOG_RETENTION	NIST	REQUIRED	AU-11 - Audit Record Retention
+LOG_RETENTION	FEDRAMP	REQUIRED	AU-11 - Audit Record Retention (3 years)
+LOG_RETENTION	ISO-27001	REQUIRED	A.8.15 - Logging (retention of log information)
+SECURITY_MONITORING	PCI-DSS	REQUIRED	Req 11.5 - File integrity monitoring
+SECURITY_MONITORING	HIPAA	REQUIRED	§164.308(a)(1)(ii)(D) - Information System Activity Review
+SECURITY_MONITORING	SOC2	ADVISORY	CC7.2 - System Monitoring for Anomalies
+SECURITY_MONITORING	GDPR	REQUIRED	Art. 32(1)(d) - Regular testing and evaluation
+SECURITY_MONITORING	NIST	REQUIRED	SI-4 - Information System Monitoring
+SECURITY_MONITORING	FEDRAMP	REQUIRED	CA-7 - Continuous Monitoring
+SECURITY_MONITORING	ISO-27001	REQUIRED	A.8.16 - Monitoring Activities
+THREAT_DETECTION	PCI-DSS	REQUIRED	Req 11.4 - Use intrusion detection/prevention systems
+THREAT_DETECTION	HIPAA	REQUIRED	§164.308(a)(1)(ii)(D) - Security incident procedures
+THREAT_DETECTION	SOC2	ADVISORY	CC7.2 - Threat Detection
+THREAT_DETECTION	GDPR	ADVISORY	Art. 33(1) - Breach Detection
+THREAT_DETECTION	NIST	REQUIRED	SI-4 - Information System Monitoring
+THREAT_DETECTION	FEDRAMP	REQUIRED	SI-4 - Information System Monitoring
+THREAT_DETECTION	ISO-27001	REQUIRED	A.8.16 - Monitoring Activities (threat detection)
+SECURITY_HUB	PCI-DSS	ADVISORY	Req 11.4 - Centralized monitoring
+SECURITY_HUB	HIPAA	ADVISORY	§164.308(a)(1)(ii)(D) - Centralized security monitoring
+SECURITY_HUB	SOC2	ADVISORY	CC7.3 - Centralized security monitoring
+SECURITY_HUB	GDPR	ADVISORY	Art. 32(1)(b) - Centralized security posture
+SECURITY_HUB	NIST	ADVISORY	SI-4 - Information System Monitoring
+SECURITY_HUB	FEDRAMP	REQUIRED	CA-7(4) - Risk Monitoring
+SECURITY_HUB	ISO-27001	ADVISORY	A.8.16 - Monitoring Activities (centralized findings)
+VULNERABILITY_SCANNING	PCI-DSS	REQUIRED	Req 11.2 - Run internal and external vulnerability scans
+VULNERABILITY_SCANNING	HIPAA	ADVISORY	§164.308(a)(8) - Periodic evaluation
+VULNERABILITY_SCANNING	SOC2	ADVISORY	CC7.1 - Vulnerability detection
+VULNERABILITY_SCANNING	GDPR	ADVISORY	Art. 32(1)(d) - Regular testing
+VULNERABILITY_SCANNING	NIST	REQUIRED	RA-5 - Vulnerability Scanning
+VULNERABILITY_SCANNING	FEDRAMP	REQUIRED	RA-5 - Vulnerability Scanning
+VULNERABILITY_SCANNING	ISO-27001	REQUIRED	A.8.8 - Management of Technical Vulnerabilities
+SENSITIVE_DATA_DISCOVERY	PCI-DSS	ADVISORY	Req 3 - Cardholder data discovery
+SENSITIVE_DATA_DISCOVERY	HIPAA	REQUIRED	§164.308(a)(1)(ii)(A) - PHI identification
+SENSITIVE_DATA_DISCOVERY	SOC2	NOT_APPLICABLE	N/A
+SENSITIVE_DATA_DISCOVERY	GDPR	REQUIRED	Art. 30 - Personal data inventory
+SENSITIVE_DATA_DISCOVERY	NIST	ADVISORY	SI-4 - Information System Monitoring
+SENSITIVE_DATA_DISCOVERY	FEDRAMP	ADVISORY	SI-4 - Information System Monitoring
+SENSITIVE_DATA_DISCOVERY	ISO-27001	ADVISORY	A.5.34 - Privacy and Protection of PII
+WAF_PROTECTION	PCI-DSS	REQUIRED	Req 6.6 - Public-facing web applications protected
+WAF_PROTECTION	HIPAA	ADVISORY	§164.312(e)(1) - Transmission security mechanisms
+WAF_PROTECTION	SOC2	REQUIRED	CC6.6 - Web application protection
+WAF_PROTECTION	GDPR	REQUIRED	Art. 32(1) - Appropriate security measures
+WAF_PROTECTION	NIST	REQUIRED	SC-7(11) - Boundary Protection
+WAF_PROTECTION	FEDRAMP	REQUIRED	SC-7 - Boundary Protection (public-facing)
+WAF_PROTECTION	ISO-27001	REQUIRED	A.8.26 - Application Security Requirements
+BACKUP_RECOVERY	PCI-DSS	REQUIRED	Req 9.5.1 - Store backup media in secure location
+BACKUP_RECOVERY	HIPAA	REQUIRED	§164.310(d)(2)(iii) - Data Backup and Storage
+BACKUP_RECOVERY	SOC2	REQUIRED	A1.3 - Recovery capabilities
+BACKUP_RECOVERY	GDPR	REQUIRED	Art. 32(1)(c) - Restore availability and access
+BACKUP_RECOVERY	NIST	REQUIRED	CP-9 - Information System Backup
+BACKUP_RECOVERY	FEDRAMP	REQUIRED	CP-9 - Information System Backup
+BACKUP_RECOVERY	ISO-27001	REQUIRED	A.8.13 - Information Backup
+HIGH_AVAILABILITY	PCI-DSS	REQUIRED	Req 12.10.4 - Provide coverage for critical systems
+HIGH_AVAILABILITY	HIPAA	REQUIRED	§164.308(a)(7)(ii)(B) - Disaster recovery plan
+HIGH_AVAILABILITY	SOC2	REQUIRED	A1.2 - Maintain system availability
+HIGH_AVAILABILITY	GDPR	REQUIRED	Art. 32(1)(b) - Ensure resilience of systems
+HIGH_AVAILABILITY	NIST	REQUIRED	CP-2 - Contingency Plan
+HIGH_AVAILABILITY	FEDRAMP	REQUIRED	CP-10 - System Recovery
+HIGH_AVAILABILITY	ISO-27001	REQUIRED	A.5.29 - Information Security During Disruption
+CHANGE_MANAGEMENT	PCI-DSS	REQUIRED	Req 6.4.5 - Implement change control procedures
+CHANGE_MANAGEMENT	HIPAA	REQUIRED	§164.308(a)(8) - Evaluation of security measures
+CHANGE_MANAGEMENT	SOC2	REQUIRED	CC8.1 - Change Management Process
+CHANGE_MANAGEMENT	GDPR	REQUIRED	Art. 32(1)(d) - Process for regular testing
+CHANGE_MANAGEMENT	NIST	REQUIRED	CM-3 - Configuration Change Control
+CHANGE_MANAGEMENT	FEDRAMP	REQUIRED	CM-3 - Configuration Change Control
+CHANGE_MANAGEMENT	ISO-27001	REQUIRED	A.8.32 - Change Management
+VULNERABILITY_MANAGEMENT	PCI-DSS	REQUIRED	Req 11.2 - Run internal and external scans
+VULNERABILITY_MANAGEMENT	HIPAA	REQUIRED	§164.308(a)(8) - Periodic evaluation
+VULNERABILITY_MANAGEMENT	SOC2	REQUIRED	CC7.1 - Vulnerability detection and remediation
+VULNERABILITY_MANAGEMENT	GDPR	REQUIRED	Art. 32(1)(d) - Regular testing and evaluating effectiveness
+VULNERABILITY_MANAGEMENT	NIST	REQUIRED	RA-5 - Vulnerability Scanning
+VULNERABILITY_MANAGEMENT	FEDRAMP	REQUIRED	CM-6 - Configuration Settings
+VULNERABILITY_MANAGEMENT	ISO-27001	REQUIRED	A.8.9 - Configuration Management
+KMS_KEY_ROTATION	PCI-DSS	REQUIRED	Req 3.6.4 - Cryptoperiod rotation
+KMS_KEY_ROTATION	HIPAA	REQUIRED	§164.312(a)(2)(iv) - Encryption key management
+KMS_KEY_ROTATION	SOC2	ADVISORY	CC6.1 - Encryption key rotation
+KMS_KEY_ROTATION	GDPR	REQUIRED	Art. 32(1)(a) - Key management
+KMS_KEY_ROTATION	NIST	REQUIRED	SC-12 - Cryptographic Key Management
+KMS_KEY_ROTATION	FEDRAMP	REQUIRED	SC-12 - Cryptographic Key Management
+KMS_KEY_ROTATION	ISO-27001	REQUIRED	A.8.24 - Use of Cryptography (key management)
+CERTIFICATE_EXPIRATION_MONITORING	PCI-DSS	ADVISORY	Req 6.3.3 - Certificate management
+CERTIFICATE_EXPIRATION_MONITORING	HIPAA	ADVISORY	§164.312(e)(1) - Certificate lifecycle
+CERTIFICATE_EXPIRATION_MONITORING	SOC2	ADVISORY	CC6.7 - Certificate management
+CERTIFICATE_EXPIRATION_MONITORING	GDPR	ADVISORY	Art. 32(1) - Availability assurance
+CERTIFICATE_EXPIRATION_MONITORING	NIST	ADVISORY	IA-5 - Authenticator Management
+CERTIFICATE_EXPIRATION_MONITORING	FEDRAMP	ADVISORY	IA-5(2) - PKI-based Authentication
+CERTIFICATE_EXPIRATION_MONITORING	ISO-27001	ADVISORY	A.8.24 - Use of Cryptography (certificate lifecycle)
+SECRETS_MANAGER	PCI-DSS	REQUIRED	Req 8.2.1 - Strong authentication credentials
+SECRETS_MANAGER	HIPAA	REQUIRED	§164.312(a)(1) - Access credential management
+SECRETS_MANAGER	SOC2	ADVISORY	CC6.1 - Credential storage
+SECRETS_MANAGER	GDPR	ADVISORY	Art. 32(1) - Secure credential storage
+SECRETS_MANAGER	NIST	REQUIRED	IA-5 - Authenticator Management
+SECRETS_MANAGER	FEDRAMP	REQUIRED	IA-5 - Authenticator Management
+SECRETS_MANAGER	ISO-27001	REQUIRED	A.5.17 - Authentication Information
+SECRETS_ROTATION	PCI-DSS	REQUIRED	Req 8.2.4 - Change user passwords at least every 90 days
+SECRETS_ROTATION	HIPAA	REQUIRED	§164.308(a)(5)(ii)(D) - Password management
+SECRETS_ROTATION	SOC2	ADVISORY	CC6.1 - Credential rotation
+SECRETS_ROTATION	GDPR	ADVISORY	Art. 32(1) - Credential lifecycle
+SECRETS_ROTATION	NIST	REQUIRED	IA-5(1) - Password-based Authentication
+SECRETS_ROTATION	FEDRAMP	REQUIRED	IA-5(1) - Password-based Authentication
+SECRETS_ROTATION	ISO-27001	ADVISORY	A.5.17 - Authentication Information (rotation)
+DATABASE_MULTI_AZ	PCI-DSS	REQUIRED	Req 12.10.4 - Critical system availability
+DATABASE_MULTI_AZ	HIPAA	REQUIRED	§164.308(a)(7)(ii)(B) - Disaster recovery
+DATABASE_MULTI_AZ	SOC2	REQUIRED	A1.2 - System availability
+DATABASE_MULTI_AZ	GDPR	REQUIRED	Art. 32(1)(b) - System resilience
+DATABASE_MULTI_AZ	NIST	REQUIRED	CP-6 - Alternate Storage Site
+DATABASE_MULTI_AZ	FEDRAMP	REQUIRED	CP-10 - System Recovery
+DATABASE_MULTI_AZ	ISO-27001	REQUIRED	A.5.29 - Information Security During Disruption (DB availability)
+DATABASE_PITR	PCI-DSS	REQUIRED	Req 9.5.1 - Backup and restore capability
+DATABASE_PITR	HIPAA	REQUIRED	§164.310(d)(2)(iii) - Data backup and recovery
+DATABASE_PITR	SOC2	REQUIRED	A1.3 - Recovery capabilities
+DATABASE_PITR	GDPR	REQUIRED	Art. 32(1)(c) - Restore data availability
+DATABASE_PITR	NIST	REQUIRED	CP-9 - Information System Backup
+DATABASE_PITR	FEDRAMP	REQUIRED	CP-9 - Information System Backup
+DATABASE_PITR	ISO-27001	REQUIRED	A.8.13 - Information Backup (point-in-time recovery)
+NETWORK_FLOW_LOGS	PCI-DSS	REQUIRED	Req 10.2.2 - Log all network access
+NETWORK_FLOW_LOGS	HIPAA	REQUIRED	§164.312(b) - Audit network access
+NETWORK_FLOW_LOGS	SOC2	REQUIRED	CC7.2 - Network monitoring
+NETWORK_FLOW_LOGS	GDPR	REQUIRED	Art. 32(1)(d) - Network monitoring
+NETWORK_FLOW_LOGS	NIST	REQUIRED	AU-2 - Audit Events
+NETWORK_FLOW_LOGS	FEDRAMP	REQUIRED	AC-4 - Information Flow Enforcement
+NETWORK_FLOW_LOGS	ISO-27001	REQUIRED	A.8.16 - Monitoring Activities (network traffic)
+AUDIT_MANAGER	PCI-DSS	ADVISORY	Req 10 - Continuous audit evidence
+AUDIT_MANAGER	HIPAA	ADVISORY	§164.308(a)(1)(ii)(D) - Audit evidence
+AUDIT_MANAGER	SOC2	REQUIRED	CC7.2 - Continuous monitoring and audit evidence
+AUDIT_MANAGER	GDPR	ADVISORY	Art. 30 - Documentation of compliance
+AUDIT_MANAGER	NIST	REQUIRED	AU-6 - Audit Review, Analysis, and Reporting
+AUDIT_MANAGER	FEDRAMP	ADVISORY	AU-6 - Audit Review, Analysis, and Reporting
+AUDIT_MANAGER	ISO-27001	ADVISORY	A.5.35 - Independent Review of Information Security
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	PCI-DSS	REQUIRED	Req 3.4 - Render sensitive data unreadable
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	HIPAA	REQUIRED	§164.312(a)(2)(iv) - Encryption of PHI logs
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	SOC2	REQUIRED	CC6.1 - Encryption of audit logs
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	GDPR	REQUIRED	Art. 32(1)(a) - Encryption of processing records
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	NIST	REQUIRED	SC-28 - Protection of Information at Rest
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	FEDRAMP	REQUIRED	AU-9 - Protection of Audit Information
+CLOUDWATCH_LOGS_KMS_ENCRYPTION	ISO-27001	REQUIRED	A.8.24 - Use of Cryptography (log encryption)
+CLOUDTRAIL_INSIGHTS	PCI-DSS	ADVISORY	Req 10.6 - Review logs for anomalies
+CLOUDTRAIL_INSIGHTS	HIPAA	ADVISORY	§164.308(a)(1)(ii)(D) - Activity review
+CLOUDTRAIL_INSIGHTS	SOC2	REQUIRED	CC7.2 - Anomaly detection in system activity
+CLOUDTRAIL_INSIGHTS	GDPR	ADVISORY	Art. 32(1)(d) - Regular testing and evaluation
+CLOUDTRAIL_INSIGHTS	NIST	REQUIRED	SI-4 - Information System Monitoring
+CLOUDTRAIL_INSIGHTS	FEDRAMP	ADVISORY	SI-4 - Information System Monitoring
+CLOUDTRAIL_INSIGHTS	ISO-27001	ADVISORY	A.8.16 - Monitoring Activities (anomaly detection)
+ROUTE53_QUERY_LOGGING	PCI-DSS	ADVISORY	Req 10.2 - Log DNS resolution
+ROUTE53_QUERY_LOGGING	HIPAA	ADVISORY	§164.312(b) - Audit DNS queries
+ROUTE53_QUERY_LOGGING	SOC2	REQUIRED	CC7.2 - Network activity monitoring
+ROUTE53_QUERY_LOGGING	GDPR	ADVISORY	Art. 32(1)(d) - Network monitoring
+ROUTE53_QUERY_LOGGING	NIST	REQUIRED	AU-2 - Audit Events including DNS
+ROUTE53_QUERY_LOGGING	FEDRAMP	ADVISORY	AU-2 - Audit Events including DNS
+ROUTE53_QUERY_LOGGING	ISO-27001	ADVISORY	A.8.16 - Monitoring Activities (DNS query visibility)
+S3_OBJECT_LOCK	PCI-DSS	REQUIRED	Req 10.7 - Protect audit trail files
+S3_OBJECT_LOCK	HIPAA	REQUIRED	§164.312(c)(1) - Data integrity controls
+S3_OBJECT_LOCK	SOC2	REQUIRED	CC6.1 - Audit trail protection
+S3_OBJECT_LOCK	GDPR	ADVISORY	Art. 32(1)(d) - Data integrity
+S3_OBJECT_LOCK	NIST	REQUIRED	AU-9 - Protection of Audit Information
+S3_OBJECT_LOCK	FEDRAMP	REQUIRED	AU-9 - Protection of Audit Information
+S3_OBJECT_LOCK	ISO-27001	REQUIRED	A.5.33 - Protection of Records
+ROOT_ACCOUNT_PROTECTION	PCI-DSS	REQUIRED	Req 8.3 - MFA for administrative access
+ROOT_ACCOUNT_PROTECTION	HIPAA	REQUIRED	§164.312(d) - Person or Entity Authentication
+ROOT_ACCOUNT_PROTECTION	SOC2	REQUIRED	CC6.1 - Privileged access controls
+ROOT_ACCOUNT_PROTECTION	GDPR	REQUIRED	Art. 32(1)(b) - Administrative access security
+ROOT_ACCOUNT_PROTECTION	NIST	REQUIRED	IA-2(1) - Multi-factor Authentication to Privileged Accounts
+ROOT_ACCOUNT_PROTECTION	FEDRAMP	REQUIRED	IA-2(1) - MFA for privileged accounts
+ROOT_ACCOUNT_PROTECTION	ISO-27001	REQUIRED	A.8.2 - Privileged Access Rights
+CREDENTIAL_ROTATION	PCI-DSS	REQUIRED	Req 8.2.4 - Change credentials every 90 days
+CREDENTIAL_ROTATION	HIPAA	REQUIRED	§164.308(a)(5)(ii)(D) - Password management
+CREDENTIAL_ROTATION	SOC2	REQUIRED	CC6.2 - Credential lifecycle management
+CREDENTIAL_ROTATION	GDPR	ADVISORY	Art. 32(1)(b) - Credential hygiene
+CREDENTIAL_ROTATION	NIST	REQUIRED	IA-5(1) - Password-based Authentication rotation
+CREDENTIAL_ROTATION	FEDRAMP	REQUIRED	IA-5(1) - Authenticator management
+CREDENTIAL_ROTATION	ISO-27001	REQUIRED	A.5.17 - Authentication Information (credential lifecycle)
+DATABASE_ACCESS_CONTROL	PCI-DSS	REQUIRED	Req 1.3 - Prohibit direct public access to databases
+DATABASE_ACCESS_CONTROL	HIPAA	REQUIRED	§164.312(a)(1) - Database access control
+DATABASE_ACCESS_CONTROL	SOC2	REQUIRED	CC6.1 - Database access restrictions
+DATABASE_ACCESS_CONTROL	GDPR	REQUIRED	Art. 32(1)(b) - Database confidentiality
+DATABASE_ACCESS_CONTROL	NIST	REQUIRED	AC-3 - Access Enforcement for databases
+DATABASE_ACCESS_CONTROL	FEDRAMP	REQUIRED	AC-3 - Database access control
+DATABASE_ACCESS_CONTROL	ISO-27001	REQUIRED	A.8.3 - Information Access Restriction
+CONTAINER_SECURITY	PCI-DSS	REQUIRED	Req 1.3/3.4 - Container network and secrets protection
+CONTAINER_SECURITY	HIPAA	REQUIRED	§164.312(a)(2)(iv) - Container secrets encryption
+CONTAINER_SECURITY	SOC2	REQUIRED	CC6.1/CC6.6 - Container access and network controls
+CONTAINER_SECURITY	GDPR	REQUIRED	Art. 32(1)(a) - Container data protection
+CONTAINER_SECURITY	NIST	REQUIRED	SC-28/AC-3 - Container security controls
+CONTAINER_SECURITY	FEDRAMP	REQUIRED	SC-28 - Container secrets protection
+CONTAINER_SECURITY	ISO-27001	REQUIRED	A.8.20/A.8.24 - Network Security and Use of Cryptography (containers)
+API_SECURITY	PCI-DSS	REQUIRED	Req 4.1/6.6 - API encryption and protection
+API_SECURITY	HIPAA	REQUIRED	§164.312(e)(1) - API transmission security
+API_SECURITY	SOC2	REQUIRED	CC6.7 - API security controls
+API_SECURITY	GDPR	REQUIRED	Art. 32(1)(a) - API data protection
+API_SECURITY	NIST	REQUIRED	SC-8/AU-2 - API security and logging
+API_SECURITY	FEDRAMP	REQUIRED	SC-8 - API transmission protection
+API_SECURITY	ISO-27001	REQUIRED	A.8.26 - Application Security Requirements (API)
+CDN_SECURITY	PCI-DSS	REQUIRED	Req 4.1/6.6 - CDN encryption and WAF
+CDN_SECURITY	HIPAA	ADVISORY	§164.312(e)(1) - CDN transmission security
+CDN_SECURITY	SOC2	REQUIRED	CC6.6/CC6.7 - CDN access and data protection
+CDN_SECURITY	GDPR	REQUIRED	Art. 32(1)(a) - CDN data protection
+CDN_SECURITY	NIST	REQUIRED	SC-7(11)/SC-8 - CDN boundary and transmission protection
+CDN_SECURITY	FEDRAMP	REQUIRED	SC-8 - CDN transmission protection
+CDN_SECURITY	ISO-27001	REQUIRED	A.8.24/A.8.26 - Use of Cryptography and Application Security (CDN)
+INSTANCE_METADATA_SECURITY	PCI-DSS	REQUIRED	Req 2.2 - Secure system configuration
+INSTANCE_METADATA_SECURITY	HIPAA	ADVISORY	§164.312(a)(1) - Instance access control
+INSTANCE_METADATA_SECURITY	SOC2	REQUIRED	CC6.1 - Secure instance configuration
+INSTANCE_METADATA_SECURITY	GDPR	ADVISORY	Art. 32(1)(b) - Instance security
+INSTANCE_METADATA_SECURITY	NIST	REQUIRED	SC-28 - Protection of Information at Rest
+INSTANCE_METADATA_SECURITY	FEDRAMP	REQUIRED	CM-6 - Configuration Settings
+INSTANCE_METADATA_SECURITY	ISO-27001	REQUIRED	A.8.9 - Configuration Management (instance metadata)
+CERTIFICATE_MANAGEMENT	PCI-DSS	ADVISORY	Req 6.3.3 - Certificate lifecycle management
+CERTIFICATE_MANAGEMENT	HIPAA	ADVISORY	§164.312(e)(1) - Certificate validity
+CERTIFICATE_MANAGEMENT	SOC2	REQUIRED	CC6.7/A1.2 - Certificate availability
+CERTIFICATE_MANAGEMENT	GDPR	ADVISORY	Art. 32(1) - Service availability
+CERTIFICATE_MANAGEMENT	NIST	REQUIRED	IA-5(2) - PKI-based Authentication
+CERTIFICATE_MANAGEMENT	FEDRAMP	REQUIRED	IA-5(2) - Certificate management
+CERTIFICATE_MANAGEMENT	ISO-27001	ADVISORY	A.8.24 - Use of Cryptography (certificate lifecycle management)
+LAMBDA_SECURITY	PCI-DSS	REQUIRED	Req 1.3/7.1 - Lambda network and access control
+LAMBDA_SECURITY	HIPAA	REQUIRED	§164.312(a)(1) - Lambda access control
+LAMBDA_SECURITY	SOC2	REQUIRED	CC6.1/CC6.6 - Lambda access and network controls
+LAMBDA_SECURITY	GDPR	REQUIRED	Art. 32(1)(b) - Lambda function protection
+LAMBDA_SECURITY	NIST	REQUIRED	AC-3/SC-7 - Lambda access and boundary protection
+LAMBDA_SECURITY	FEDRAMP	REQUIRED	AC-3 - Lambda access enforcement
+LAMBDA_SECURITY	ISO-27001	REQUIRED	A.8.3/A.8.20 - Information Access Restriction and Network Security (Lambda)
+DATABASE_LOGGING	PCI-DSS	REQUIRED	Req 10.2 - Database audit trails
+DATABASE_LOGGING	HIPAA	REQUIRED	§164.312(b) - Database audit controls
+DATABASE_LOGGING	SOC2	REQUIRED	CC7.2 - Database monitoring
+DATABASE_LOGGING	GDPR	REQUIRED	Art. 30 - Database processing records
+DATABASE_LOGGING	NIST	REQUIRED	AU-2 - Database audit events
+DATABASE_LOGGING	FEDRAMP	REQUIRED	AU-2 - Database auditing
+DATABASE_LOGGING	ISO-27001	REQUIRED	A.8.15 - Logging (database activity)
+DELETION_PROTECTION	PCI-DSS	REQUIRED	Req 9.5.1 - Data protection controls
+DELETION_PROTECTION	HIPAA	REQUIRED	§164.310(d)(2)(iii) - Data integrity
+DELETION_PROTECTION	SOC2	REQUIRED	A1.2 - System availability protection
+DELETION_PROTECTION	GDPR	REQUIRED	Art. 32(1)(c) - Data availability
+DELETION_PROTECTION	NIST	REQUIRED	CP-9/SC-28 - Information protection
+DELETION_PROTECTION	FEDRAMP	REQUIRED	CP-9 - Information system backup
+DELETION_PROTECTION	ISO-27001	REQUIRED	A.8.13 - Information Backup (deletion protection)
+SNS_KMS_ENCRYPTION	PCI-DSS	REQUIRED	Req 8.2.1 - Data at rest encryption
+SNS_KMS_ENCRYPTION	HIPAA	REQUIRED	§164.312(a)(2)(iv) - Encryption of ePHI
+SNS_KMS_ENCRYPTION	SOC2	ADVISORY	CC6.1 - Message encryption
+SNS_KMS_ENCRYPTION	GDPR	ADVISORY	Art. 32(1)(a) - Encryption of personal data
+SNS_KMS_ENCRYPTION	NIST	REQUIRED	SC-28 - Protection of Information at Rest
+SNS_KMS_ENCRYPTION	FEDRAMP	REQUIRED	SC-28 - Information at rest
+SNS_KMS_ENCRYPTION	ISO-27001	ADVISORY	A.8.24 - Use of Cryptography (topic encryption)
+EC2_IMDSV2	PCI-DSS	ADVISORY	Defense in depth for instance metadata
+EC2_IMDSV2	HIPAA	REQUIRED	§164.308(a)(3)(i) - Access controls
+EC2_IMDSV2	SOC2	REQUIRED	CC6.1 - Instance metadata protection
+EC2_IMDSV2	GDPR	ADVISORY	Art. 32(1)(b) - Access security
+EC2_IMDSV2	NIST	REQUIRED	AC-3 - Access Enforcement
+EC2_IMDSV2	FEDRAMP	REQUIRED	AC-3 - Access control enforcement
+EC2_IMDSV2	ISO-27001	REQUIRED	A.8.9 - Configuration Management (IMDSv2 enforcement)

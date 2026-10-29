@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * HIPAA organizational and administrative safeguard validation rules.
@@ -120,77 +121,57 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // AWS BAA signed
-        boolean awsBaaSigned = getBooleanSetting(ctx, "awsBaaSigned", false);
+        boolean awsBaaSigned = RuleSettings.contextValue(ctx, "awsBaaSigned", false);
 
-        if (!awsBaaSigned) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BAA-AWS",
-                "AWS Business Associate Agreement (BAA) must be signed",
-                "Sign AWS BAA through AWS Artifact or contact AWS sales. " +
+        rules.add(ComplianceRule.check(
+            awsBaaSigned,
+            "HIPAA-BAA-AWS",
+            "AWS Business Associate Agreement signed",
+            "AWS Business Associate Agreement (BAA) must be signed",
+            null,
+            "Sign AWS BAA through AWS Artifact or contact AWS sales. " +
                 "HIPAA §164.308(b)(1): Required for all AWS services handling PHI. " +
-                "Set awsBaaSigned = true after signing BAA."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BAA-AWS",
-                "AWS Business Associate Agreement signed"
-            ));
-        }
+                "Set awsBaaSigned = true after signing BAA."));
 
         // BAA for third-party services
-        boolean thirdPartyBaasDocumented = getBooleanSetting(ctx, "thirdPartyBaasDocumented", false);
+        boolean thirdPartyBaasDocumented = RuleSettings.contextValue(ctx, "thirdPartyBaasDocumented", false);
 
-        if (!thirdPartyBaasDocumented) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BAA-THIRD-PARTY",
-                "Business Associate Agreements required for all third-party services",
-                "Document BAAs with all vendors that may access PHI: " +
+        rules.add(ComplianceRule.check(
+            thirdPartyBaasDocumented,
+            "HIPAA-BAA-THIRD-PARTY",
+            "Third-party Business Associate Agreements documented",
+            "Business Associate Agreements required for all third-party services",
+            null,
+            "Document BAAs with all vendors that may access PHI: " +
                 "monitoring tools, log management, backup services, support vendors. " +
                 "HIPAA §164.308(b)(1), §164.314(a). " +
-                "Set thirdPartyBaasDocumented = true when BAAs are in place."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BAA-THIRD-PARTY",
-                "Third-party Business Associate Agreements documented"
-            ));
-        }
+                "Set thirdPartyBaasDocumented = true when BAAs are in place."));
 
         // BAA provisions verification
-        boolean baaProvisionsVerified = getBooleanSetting(ctx, "baaProvisionsVerified", false);
+        boolean baaProvisionsVerified = RuleSettings.contextValue(ctx, "baaProvisionsVerified", false);
 
-        if (!baaProvisionsVerified) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BAA-PROVISIONS",
-                "Verify all BAAs include required HIPAA provisions",
-                "Ensure BAAs include: safeguard obligations, subcontractor requirements, " +
+        rules.add(ComplianceRule.check(
+            baaProvisionsVerified,
+            "HIPAA-BAA-PROVISIONS",
+            "BAA provisions verified for compliance",
+            "Verify all BAAs include required HIPAA provisions",
+            null,
+            "Ensure BAAs include: safeguard obligations, subcontractor requirements, " +
                 "breach notification, termination provisions, data return/destruction. " +
-                "HIPAA §164.314(a)(2). Set baaProvisionsVerified = true after verification."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BAA-PROVISIONS",
-                "BAA provisions verified for compliance"
-            ));
-        }
+                "HIPAA §164.314(a)(2). Set baaProvisionsVerified = true after verification."));
 
         // Subcontractor BAAs (AWS sub-processors)
-        boolean subcontractorBaasTracked = getBooleanSetting(ctx, "subcontractorBaasTracked", false);
+        boolean subcontractorBaasTracked = RuleSettings.contextValue(ctx, "subcontractorBaasTracked", false);
 
-        if (!subcontractorBaasTracked) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BAA-SUBCONTRACTORS",
-                "Track Business Associate Agreements for all subcontractors",
-                "Maintain list of AWS services used and verify each has BAA coverage. " +
+        rules.add(ComplianceRule.check(
+            subcontractorBaasTracked,
+            "HIPAA-BAA-SUBCONTRACTORS",
+            "Subcontractor BAAs tracked",
+            "Track Business Associate Agreements for all subcontractors",
+            null,
+            "Maintain list of AWS services used and verify each has BAA coverage. " +
                 "Monitor AWS sub-processor lists. HIPAA §164.308(b)(2). " +
-                "Set subcontractorBaasTracked = true when tracking system is in place."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BAA-SUBCONTRACTORS",
-                "Subcontractor BAAs tracked"
-            ));
-        }
+                "Set subcontractorBaasTracked = true when tracking system is in place."));
 
         return rules;
     }
@@ -210,58 +191,43 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Authorization procedures
-        boolean workforceAuthorizationProcedures = getBooleanSetting(ctx, "workforceAuthorizationProcedures", false);
+        boolean workforceAuthorizationProcedures = RuleSettings.contextValue(ctx, "workforceAuthorizationProcedures", false);
 
-        if (!workforceAuthorizationProcedures) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-WORKFORCE-AUTHORIZATION",
-                "Implement workforce authorization procedures for PHI access",
-                "Document and implement procedures for determining PHI access needs. " +
+        rules.add(ComplianceRule.check(
+            workforceAuthorizationProcedures,
+            "HIPAA-WORKFORCE-AUTHORIZATION",
+            "Workforce authorization procedures implemented",
+            "Implement workforce authorization procedures for PHI access",
+            null,
+            "Document and implement procedures for determining PHI access needs. " +
                 "HIPAA §164.308(a)(3)(ii)(A). IAM roles provide technical enforcement. " +
-                "Set workforceAuthorizationProcedures = true when documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-WORKFORCE-AUTHORIZATION",
-                "Workforce authorization procedures implemented"
-            ));
-        }
+                "Set workforceAuthorizationProcedures = true when documented."));
 
         // Termination procedures
-        boolean terminationProcedures = getBooleanSetting(ctx, "terminationProcedures", false);
+        boolean terminationProcedures = RuleSettings.contextValue(ctx, "terminationProcedures", false);
 
-        if (!terminationProcedures) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-TERMINATION-PROCEDURES",
-                "Implement workforce termination procedures",
-                "Document procedures for terminating access when employment ends. " +
+        rules.add(ComplianceRule.check(
+            terminationProcedures,
+            "HIPAA-TERMINATION-PROCEDURES",
+            "Termination procedures implemented",
+            "Implement workforce termination procedures",
+            null,
+            "Document procedures for terminating access when employment ends. " +
                 "HIPAA §164.308(a)(3)(ii)(C). Include IAM user/role removal. " +
-                "Set terminationProcedures = true when procedures are documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-TERMINATION-PROCEDURES",
-                "Termination procedures implemented"
-            ));
-        }
+                "Set terminationProcedures = true when procedures are documented."));
 
         // HIPAA training
-        boolean hipaaTrainingProgram = getBooleanSetting(ctx, "hipaaTrainingProgram", false);
+        boolean hipaaTrainingProgram = RuleSettings.contextValue(ctx, "hipaaTrainingProgram", false);
 
-        if (!hipaaTrainingProgram) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-TRAINING",
-                "HIPAA security awareness training required for workforce",
-                "Implement annual HIPAA security awareness training program. " +
+        rules.add(ComplianceRule.check(
+            hipaaTrainingProgram,
+            "HIPAA-TRAINING",
+            "HIPAA training program implemented",
+            "HIPAA security awareness training required for workforce",
+            null,
+            "Implement annual HIPAA security awareness training program. " +
                 "HIPAA §164.308(a)(5). Document training completion. " +
-                "Set hipaaTrainingProgram = true when training is implemented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-TRAINING",
-                "HIPAA training program implemented"
-            ));
-        }
+                "Set hipaaTrainingProgram = true when training is implemented."));
 
         return rules;
     }
@@ -279,41 +245,31 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Emergency access procedures documented
-        boolean emergencyAccessProcedures = getBooleanSetting(ctx, "emergencyAccessProcedures", false);
+        boolean emergencyAccessProcedures = RuleSettings.contextValue(ctx, "emergencyAccessProcedures", false);
 
-        if (!emergencyAccessProcedures) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-EMERGENCY-ACCESS",
-                "Emergency access procedures required for PHI systems",
-                "Document procedures for obtaining PHI access during emergency. " +
+        rules.add(ComplianceRule.check(
+            emergencyAccessProcedures,
+            "HIPAA-EMERGENCY-ACCESS",
+            "Emergency access procedures documented",
+            "Emergency access procedures required for PHI systems",
+            null,
+            "Document procedures for obtaining PHI access during emergency. " +
                 "HIPAA §164.308(a)(7)(ii)(C), §164.312(a)(2)(ii). " +
                 "Include break-glass IAM roles, audit logging, approval workflows. " +
-                "Set emergencyAccessProcedures = true when documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-EMERGENCY-ACCESS",
-                "Emergency access procedures documented"
-            ));
-        }
+                "Set emergencyAccessProcedures = true when documented."));
 
         // Automatic logoff
-        boolean automaticLogoffEnabled = getBooleanSetting(ctx, "automaticLogoffEnabled", false);
+        boolean automaticLogoffEnabled = RuleSettings.contextValue(ctx, "automaticLogoffEnabled", false);
 
-        if (!automaticLogoffEnabled) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-AUTOMATIC-LOGOFF",
-                "Automatic logoff required for workstations accessing PHI",
-                "Implement automatic session timeout for Jenkins/application access. " +
+        rules.add(ComplianceRule.check(
+            automaticLogoffEnabled,
+            "HIPAA-AUTOMATIC-LOGOFF",
+            "Automatic logoff/session timeout enabled",
+            "Automatic logoff required for workstations accessing PHI",
+            null,
+            "Implement automatic session timeout for Jenkins/application access. " +
                 "HIPAA §164.312(a)(2)(iii). Typical timeout: 15-30 minutes. " +
-                "Set automaticLogoffEnabled = true when session timeouts are configured."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-AUTOMATIC-LOGOFF",
-                "Automatic logoff/session timeout enabled"
-            ));
-        }
+                "Set automaticLogoffEnabled = true when session timeouts are configured."));
 
         return rules;
     }
@@ -332,72 +288,45 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
         List<ComplianceRule> rules = new ArrayList<>();
 
         // Incident response plan
-        boolean incidentResponsePlan = getBooleanSetting(ctx, "incidentResponsePlan", false);
+        boolean incidentResponsePlan = RuleSettings.contextValue(ctx, "incidentResponsePlan", false);
 
-        if (!incidentResponsePlan) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-INCIDENT-RESPONSE",
-                "Security incident response plan required",
-                "Document incident response procedures including breach identification, " +
+        rules.add(ComplianceRule.check(
+            incidentResponsePlan,
+            "HIPAA-INCIDENT-RESPONSE",
+            "Security incident response plan documented",
+            "Security incident response plan required",
+            null,
+            "Document incident response procedures including breach identification, " +
                 "investigation, mitigation, and notification. HIPAA §164.308(a)(6). " +
-                "Set incidentResponsePlan = true when plan is documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-INCIDENT-RESPONSE",
-                "Security incident response plan documented"
-            ));
-        }
+                "Set incidentResponsePlan = true when plan is documented."));
 
         // Breach notification procedures
-        boolean breachNotificationProcedures = getBooleanSetting(ctx, "breachNotificationProcedures", false);
+        boolean breachNotificationProcedures = RuleSettings.contextValue(ctx, "breachNotificationProcedures", false);
 
-        if (!breachNotificationProcedures) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BREACH-NOTIFICATION",
-                "Breach notification procedures required (60-day timeline)",
-                "Document breach notification procedures: risk assessment, individual notification " +
+        rules.add(ComplianceRule.check(
+            breachNotificationProcedures,
+            "HIPAA-BREACH-NOTIFICATION",
+            "Breach notification procedures documented",
+            "Breach notification procedures required (60-day timeline)",
+            null,
+            "Document breach notification procedures: risk assessment, individual notification " +
                 "(60 days), HHS notification, media notification (>500 individuals). " +
                 "HIPAA §164.410, 45 CFR 164.400-414. " +
-                "Set breachNotificationProcedures = true when procedures are documented."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BREACH-NOTIFICATION",
-                "Breach notification procedures documented"
-            ));
-        }
+                "Set breachNotificationProcedures = true when procedures are documented."));
 
         // Breach detection automation
-        boolean breachDetectionAutomation = getBooleanSetting(ctx, "breachDetectionAutomation", false);
+        boolean breachDetectionAutomation = RuleSettings.contextValue(ctx, "breachDetectionAutomation", false);
 
-        if (!breachDetectionAutomation) {
-            rules.add(ComplianceRule.fail(
-                "HIPAA-BREACH-DETECTION",
-                "Automated breach detection recommended",
-                "Configure GuardDuty, Security Hub, and CloudWatch alarms for breach indicators. " +
-                "Set breachDetectionAutomation = true when automation is configured."
-            ));
-        } else {
-            rules.add(ComplianceRule.pass(
-                "HIPAA-BREACH-DETECTION",
-                "Automated breach detection configured"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            breachDetectionAutomation,
+            "HIPAA-BREACH-DETECTION",
+            "Automated breach detection configured",
+            "Automated breach detection recommended",
+            null,
+            "Configure GuardDuty, Security Hub, and CloudWatch alarms for breach indicators. " +
+                "Set breachDetectionAutomation = true when automation is configured."));
 
         return rules;
-    }
-
-    /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private static boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
     }
 
     /**
@@ -411,6 +340,6 @@ public class HipaaOrganizationalRules implements FrameworkRules<SystemContext> {
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of();
+        return ClaimedControls.of();
     }
 }

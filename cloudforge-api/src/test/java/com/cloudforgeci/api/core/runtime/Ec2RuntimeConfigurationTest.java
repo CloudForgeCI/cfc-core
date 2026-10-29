@@ -1,6 +1,7 @@
 package com.cloudforgeci.api.core.runtime;
 
 import com.cloudforgeci.api.core.DeploymentContext;
+import com.cloudforgeci.api.test.TestInfrastructureBuilder;
 import com.cloudforgeci.api.core.SystemContext;
 import com.cloudforge.core.iam.IAMProfileMapper;
 import com.cloudforge.core.enums.IAMProfile;
@@ -77,10 +78,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("maxInstanceCapacity", 1);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -105,10 +104,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("maxInstanceCapacity", 3);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -131,10 +128,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("securityProfile", "DEV");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -152,10 +147,8 @@ class Ec2RuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestEc2WireNoSsl", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -182,10 +175,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("fqdn", "jenkins.example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -208,10 +199,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("maxInstanceCapacity", 3);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -228,10 +217,8 @@ class Ec2RuntimeConfigurationTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestEc2SkipFargate", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -277,10 +264,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("enableSsl", true);
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.STAGING);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 
@@ -302,10 +287,8 @@ class Ec2RuntimeConfigurationTest {
         cfcContext.put("domain", "example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         Ec2RuntimeConfiguration config = new Ec2RuntimeConfiguration();
 

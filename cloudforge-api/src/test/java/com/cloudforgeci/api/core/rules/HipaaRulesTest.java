@@ -48,10 +48,8 @@ class HipaaRulesTest {
         App app = new App();
         Stack stack = createHipaaStack(app, "TestHipaa", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         // Then: Should not throw
@@ -64,10 +62,8 @@ class HipaaRulesTest {
         App app = new App();
         Stack stack = createHipaaStack(app, "TestHipaaDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.DEV);
 
         // When: Installing HIPAA rules
         // Then: Should not throw
@@ -79,10 +75,8 @@ class HipaaRulesTest {
         App app = new App();
         Stack stack = createHipaaStack(app, "TestHipaaMultiple", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules multiple times
         new HipaaRules().install(ctx);
@@ -106,10 +100,8 @@ class HipaaRulesTest {
         cfcContext.put("kmsKeyRotation", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -131,10 +123,8 @@ class HipaaRulesTest {
         cfcContext.put("minimumTlsVersion", "1.2");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -157,10 +147,8 @@ class HipaaRulesTest {
         cfcContext.put("ssoInstanceArn", "arn:aws:sso:::instance/ssoins-1234567890abcdef");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -182,10 +170,8 @@ class HipaaRulesTest {
         cfcContext.put("logRetentionDays", "2555");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -206,10 +192,8 @@ class HipaaRulesTest {
         cfcContext.put("fileIntegrityMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -233,10 +217,8 @@ class HipaaRulesTest {
         cfcContext.put("mfaEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -259,10 +241,8 @@ class HipaaRulesTest {
         cfcContext.put("integrityVerification", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -284,10 +264,8 @@ class HipaaRulesTest {
         cfcContext.put("disasterRecoveryPlan", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -309,10 +287,8 @@ class HipaaRulesTest {
         cfcContext.put("securityContactEmail", "security@example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -333,10 +309,8 @@ class HipaaRulesTest {
         cfcContext.put("autoLogout", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -357,10 +331,8 @@ class HipaaRulesTest {
         cfcContext.put("dataDisposalPolicy", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -382,10 +354,8 @@ class HipaaRulesTest {
         cfcContext.put("networkMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -407,10 +377,8 @@ class HipaaRulesTest {
         cfcContext.put("securityUpdatesEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -432,10 +400,8 @@ class HipaaRulesTest {
         cfcContext.put("malwareScanLogging", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -488,10 +454,8 @@ class HipaaRulesTest {
         cfcContext.put("networkMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules with all requirements
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -503,10 +467,8 @@ class HipaaRulesTest {
         App app = new App();
         Stack stack = createHipaaStack(app, "TestHipaaMinimal", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing HIPAA rules
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
@@ -527,10 +489,8 @@ class HipaaRulesTest {
         cfcContext.put("riskManagementProcess", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -550,10 +510,8 @@ class HipaaRulesTest {
         cfcContext.put("securityMeasuresImplemented", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -573,10 +531,8 @@ class HipaaRulesTest {
         cfcContext.put("violationTrackingEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -597,10 +553,8 @@ class HipaaRulesTest {
         cfcContext.put("regularAuditSchedule", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -620,10 +574,8 @@ class HipaaRulesTest {
         cfcContext.put("securityContactEmail", "security@example.com");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -644,10 +596,8 @@ class HipaaRulesTest {
         cfcContext.put("trainingDocumentation", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -667,10 +617,8 @@ class HipaaRulesTest {
         cfcContext.put("periodicSecurityUpdates", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -691,10 +639,8 @@ class HipaaRulesTest {
         cfcContext.put("passwordRotationDays", "90");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -715,10 +661,8 @@ class HipaaRulesTest {
         cfcContext.put("bruteForceProtection", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -738,10 +682,8 @@ class HipaaRulesTest {
         cfcContext.put("thirdPartyRiskAssessment", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -761,10 +703,8 @@ class HipaaRulesTest {
         cfcContext.put("datacenterSecurityEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -784,10 +724,8 @@ class HipaaRulesTest {
         cfcContext.put("screenLockEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -809,10 +747,8 @@ class HipaaRulesTest {
         cfcContext.put("backupTestingEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -833,10 +769,8 @@ class HipaaRulesTest {
         cfcContext.put("recoveryPointObjective", "1");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -856,10 +790,8 @@ class HipaaRulesTest {
         cfcContext.put("criticalSystemsIdentified", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -880,10 +812,8 @@ class HipaaRulesTest {
         cfcContext.put("testResultsDocumented", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -903,10 +833,8 @@ class HipaaRulesTest {
         cfcContext.put("dataClassification", "SENSITIVE");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -926,10 +854,8 @@ class HipaaRulesTest {
         cfcContext.put("periodicSecurityAssessment", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -949,10 +875,8 @@ class HipaaRulesTest {
         cfcContext.put("sharedAccountsProhibited", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -972,10 +896,8 @@ class HipaaRulesTest {
         cfcContext.put("breakGlassAccountsConfigured", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -995,10 +917,8 @@ class HipaaRulesTest {
         cfcContext.put("sessionTimeout", "900");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -1020,10 +940,8 @@ class HipaaRulesTest {
         cfcContext.put("kmsKeyRotation", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -1043,10 +961,8 @@ class HipaaRulesTest {
         cfcContext.put("digitalSignaturesEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -1066,10 +982,8 @@ class HipaaRulesTest {
         cfcContext.put("checksumValidation", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -1091,10 +1005,8 @@ class HipaaRulesTest {
         cfcContext.put("tlsEnforcementEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new HipaaRules().install(ctx));
     }
@@ -1105,10 +1017,8 @@ class HipaaRulesTest {
         App app = new App();
         Stack stack = createHipaaStack(app, "TestHipaaIdempotent", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing HIPAA rules multiple times
         new HipaaRules().install(ctx);
@@ -1236,11 +1146,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaSecMgmt", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1257,13 +1164,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing security monitoring: " + profile + " securityMonitoring=" + securityMonitoring + " guardDuty=" + guardDuty);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " securityMonitoring=" + securityMonitoring + " guardDuty=" + guardDuty);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing security monitoring: " + profile + " securityMonitoring=" + securityMonitoring + " guardDuty=" + guardDuty,
+            "Expected validation to pass: " + profile + " securityMonitoring=" + securityMonitoring + " guardDuty=" + guardDuty);
     }
 
     /**
@@ -1332,11 +1235,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaPhys", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1357,13 +1257,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing backup: " + profile + " automatedBackup=" + automatedBackup + " crossRegion=" + crossRegion);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " automatedBackup=" + automatedBackup + " crossRegion=" + crossRegion);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing backup: " + profile + " automatedBackup=" + automatedBackup + " crossRegion=" + crossRegion,
+            "Expected validation to pass: " + profile + " automatedBackup=" + automatedBackup + " crossRegion=" + crossRegion);
     }
 
     /**
@@ -1431,11 +1327,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaAuth", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1448,13 +1341,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for authMode=none: " + profile + " " + authMode);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " " + authMode);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for authMode=none: " + profile + " " + authMode,
+            "Expected validation to pass: " + profile + " " + authMode);
     }
 
     /**
@@ -1526,11 +1415,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaAudit", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1547,13 +1433,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing audit controls: " + profile + " cloudTrail=" + cloudTrail + " flowLogs=" + flowLogs + " albLogging=" + albLogging);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " cloudTrail=" + cloudTrail + " flowLogs=" + flowLogs + " albLogging=" + albLogging);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing audit controls: " + profile + " cloudTrail=" + cloudTrail + " flowLogs=" + flowLogs + " albLogging=" + albLogging,
+            "Expected validation to pass: " + profile + " cloudTrail=" + cloudTrail + " flowLogs=" + flowLogs + " albLogging=" + albLogging);
     }
 
     /**
@@ -1633,11 +1515,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaMfa", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1656,13 +1535,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing auth/MFA: " + profile + " authMode=" + authMode + " cognitoMfa=" + cognitoMfa + " cognitoAuto=" + cognitoAuto + " hasSso=" + hasSso);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " authMode=" + authMode + " cognitoMfa=" + cognitoMfa + " cognitoAuto=" + cognitoAuto + " hasSso=" + hasSso);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing auth/MFA: " + profile + " authMode=" + authMode + " cognitoMfa=" + cognitoMfa + " cognitoAuto=" + cognitoAuto + " hasSso=" + hasSso,
+            "Expected validation to pass: " + profile + " authMode=" + authMode + " cognitoMfa=" + cognitoMfa + " cognitoAuto=" + cognitoAuto + " hasSso=" + hasSso);
     }
 
     /**
@@ -1737,11 +1612,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaTLS", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1760,13 +1632,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for transmission security: " + profile + " hasCert=" + hasCert + " efsTransit=" + efsTransit + " networkMode=" + networkMode);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " hasCert=" + hasCert + " efsTransit=" + efsTransit + " networkMode=" + networkMode);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for transmission security: " + profile + " hasCert=" + hasCert + " efsTransit=" + efsTransit + " networkMode=" + networkMode,
+            "Expected validation to pass: " + profile + " hasCert=" + hasCert + " efsTransit=" + efsTransit + " networkMode=" + networkMode);
     }
 
     /**
@@ -1844,11 +1712,8 @@ class HipaaRulesTest {
         }
 
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaRetention", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1865,13 +1730,9 @@ class HipaaRulesTest {
             }
         }
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for retention: " + profile + " retentionDays=" + retentionDays);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " retentionDays=" + retentionDays);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for retention: " + profile + " retentionDays=" + retentionDays,
+            "Expected validation to pass: " + profile + " retentionDays=" + retentionDays);
     }
 
     /**
@@ -1896,11 +1757,8 @@ class HipaaRulesTest {
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaProfile", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -1911,13 +1769,9 @@ class HipaaRulesTest {
         boolean shouldFail = "ENFORCE".equals(complianceMode) &&
                            (secProfile == SecurityProfile.PRODUCTION || secProfile == SecurityProfile.STAGING);
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for missing requirements: " + profile + " " + complianceMode);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass: " + profile + " " + complianceMode);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for missing requirements: " + profile + " " + complianceMode,
+            "Expected validation to pass: " + profile + " " + complianceMode);
     }
 
     /**
@@ -1987,11 +1841,8 @@ class HipaaRulesTest {
 
         SecurityProfile secProfile = SecurityProfile.valueOf(profile);
         RuntimeType runtimeType = RuntimeType.valueOf(runtime);
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaComp", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         new SecurityRules().install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
@@ -2015,13 +1866,9 @@ class HipaaRulesTest {
                             (secProfile == SecurityProfile.STAGING &&
                              (!cloudTrail || !flowLogs)));                         // STAGING blocks on audit logging too
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for comprehensive check: " + profile + " auth=" + authMode + " mfa=" + cognitoMfa + " retention=" + retention);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for comprehensive check: " + profile + " auth=" + authMode + " mfa=" + cognitoMfa + " retention=" + retention);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for comprehensive check: " + profile + " auth=" + authMode + " mfa=" + cognitoMfa + " retention=" + retention,
+            "Expected validation to pass for comprehensive check: " + profile + " auth=" + authMode + " mfa=" + cognitoMfa + " retention=" + retention);
     }
 
     /** Every HIPAA control set to compliant -- callers override just the one control under test. */
@@ -2634,21 +2481,14 @@ class HipaaRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaFlowLogs", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         SecurityRules.install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA flow logs validation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA flow logs validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected HIPAA flow logs validation to fail for: " + profile,
+            "Expected HIPAA flow logs validation to pass: " + profile);
     }
 
     @ParameterizedTest
@@ -2703,21 +2543,14 @@ class HipaaRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaEncryption", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         SecurityRules.install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA encryption validation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA encryption validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected HIPAA encryption validation to fail for: " + profile,
+            "Expected HIPAA encryption validation to pass: " + profile);
     }
 
     @ParameterizedTest
@@ -2777,21 +2610,14 @@ class HipaaRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaLogRetention", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         SecurityRules.install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA log retention validation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA log retention validation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected HIPAA log retention validation to fail for: " + profile,
+            "Expected HIPAA log retention validation to pass: " + profile);
     }
 
     @ParameterizedTest
@@ -2846,20 +2672,13 @@ class HipaaRulesTest {
             customContext.put("s3ObjectLockEnabled", "true");
         }
 
-        TestInfrastructureBuilder builder = new TestInfrastructureBuilder(
+        TestInfrastructureBuilder builder = TestInfrastructureBuilder.minimalWithCertificate(
             "TestHipaaMultiViolation", secProfile, runtimeType, customContext);
-
-        builder.createMinimalInfrastructure();
-        builder.createMockCertificate();
         SecurityRules.install(builder.getSystemContext());
         new HipaaRules().install(builder.getSystemContext());
 
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA multi-violation to fail for: " + profile);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected HIPAA multi-violation to pass: " + profile);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected HIPAA multi-violation to fail for: " + profile,
+            "Expected HIPAA multi-violation to pass: " + profile);
     }
 }

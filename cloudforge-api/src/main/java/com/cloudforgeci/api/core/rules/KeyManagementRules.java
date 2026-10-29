@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 import java.util.Set;
+import com.cloudforgeci.api.core.rules.ComplianceMatrix.SecurityControl;
 
 /**
  * Key Management compliance validation rules.
@@ -125,7 +126,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
              config.isS3EncryptionEnabled());
 
         // Check deployment context override
-        boolean kmsKeyRotationEnabled = getBooleanSetting(ctx, "kmsKeyRotationEnabled", encryptionEnabled);
+        boolean kmsKeyRotationEnabled = RuleSettings.contextValue(ctx, "kmsKeyRotationEnabled", encryptionEnabled);
 
         // Use ComplianceMatrix to determine if KMS rotation is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -199,7 +200,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         // Certificate expiration monitoring
         boolean securityMonitoringEnabled = config != null && config.isSecurityMonitoringEnabled();
-        boolean certExpirationMonitoringEnabled = getBooleanSetting(ctx, "certificateExpirationMonitoring", securityMonitoringEnabled);
+        boolean certExpirationMonitoringEnabled = RuleSettings.contextValue(ctx, "certificateExpirationMonitoring", securityMonitoringEnabled);
 
         // Use ComplianceMatrix to determine if certificate monitoring is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -246,20 +247,15 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
         }
 
         // ACM automatic renewal (for ACM certificates) - default to true (ACM renews automatically)
-        boolean usesAcmAutoRenewal = getBooleanSetting(ctx, "acmAutoRenewalEnabled", true);
+        boolean usesAcmAutoRenewal = RuleSettings.contextValue(ctx, "acmAutoRenewalEnabled", true);
 
-        if (usesAcmAutoRenewal) {
-            rules.add(ComplianceRule.pass(
-                "CERT-AUTO-RENEWAL",
-                "ACM automatic certificate renewal enabled"
-            ));
-        } else {
-            rules.add(ComplianceRule.fail(
-                "CERT-AUTO-RENEWAL",
-                "ACM automatic renewal recommended for certificates",
-                "Use AWS Certificate Manager with automatic renewal for HTTPS certificates"
-            ));
-        }
+        rules.add(ComplianceRule.check(
+            usesAcmAutoRenewal,
+            "CERT-AUTO-RENEWAL",
+            "ACM automatic certificate renewal enabled",
+            "ACM automatic renewal recommended for certificates",
+            null,
+            "Use AWS Certificate Manager with automatic renewal for HTTPS certificates"));
 
         return rules;
     }
@@ -281,7 +277,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
         // Secrets Manager usage for credentials
         boolean encryptionEnabled = config != null && config.isS3EncryptionEnabled();
-        boolean usesSecretsManager = getBooleanSetting(ctx, "secretsManagerEnabled", encryptionEnabled);
+        boolean usesSecretsManager = RuleSettings.contextValue(ctx, "secretsManagerEnabled", encryptionEnabled);
 
         // Use ComplianceMatrix to determine if Secrets Manager is REQUIRED or ADVISORY
         String complianceFrameworks = ctx.cfc.complianceFrameworks();
@@ -322,7 +318,7 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
 
             // Automatic secret rotation (only validate if Secrets Manager is in use)
             if (usesSecretsManager) {
-                boolean secretRotationEnabled = getBooleanSetting(ctx, "secretRotationEnabled", encryptionEnabled);
+                boolean secretRotationEnabled = RuleSettings.contextValue(ctx, "secretRotationEnabled", encryptionEnabled);
 
                 ComplianceMatrix.ValidationResult rotationResult = ComplianceMatrix.validateControlMultiFramework(
                     ComplianceMatrix.SecurityControl.SECRETS_ROTATION,
@@ -376,26 +372,14 @@ public class KeyManagementRules implements FrameworkRules<SystemContext> {
     }
 
     /**
-     * Helper method to safely get boolean settings from deployment context.
-     */
-    private boolean getBooleanSetting(SystemContext ctx, String key, boolean defaultValue) {
-        try {
-            String value = ctx.cfc.getContextValue(key, String.valueOf(defaultValue));
-            return Boolean.parseBoolean(value);
-        } catch (Exception e) {
-            return defaultValue;
-        }
-    }
-
-    /**
      * Controls checked across every {@code validate*} method above -- see {@link
      * com.cloudforge.core.interfaces.FrameworkRules#claimedControls}.
      */
     @Override
     public Set<String> claimedControls() {
-        return Set.of(
-            "KMS_KEY_ROTATION", "CERTIFICATE_EXPIRATION_MONITORING", "CERTIFICATE_MANAGEMENT",
-            "SECRETS_MANAGER", "SECRETS_ROTATION"
+        return ClaimedControls.of(
+            SecurityControl.KMS_KEY_ROTATION, SecurityControl.CERTIFICATE_EXPIRATION_MONITORING, SecurityControl.CERTIFICATE_MANAGEMENT,
+            SecurityControl.SECRETS_MANAGER, SecurityControl.SECRETS_ROTATION
         );
     }
 }

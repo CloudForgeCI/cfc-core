@@ -46,10 +46,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestThreatDev", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing threat protection rules
         // Then: Should not throw (advisory for DEV)
@@ -62,10 +60,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestThreatProd", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -86,10 +82,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -109,10 +103,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("fileIntegrityMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -125,10 +117,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestThreatValidation", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         new ThreatProtectionRules().install(ctx);
@@ -152,10 +142,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("malwareScanLogging", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -174,10 +162,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("antiMalwareAutoUpdate", "false");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -195,10 +181,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("containerImageScanning", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -218,10 +202,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("networkMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -240,10 +222,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("criticalFileMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -255,10 +235,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestThreatStaging", SecurityProfile.STAGING);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.STAGING);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.STAGING, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.STAGING);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -279,10 +257,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("fileIntegrityMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -300,10 +276,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("complianceFrameworks", "PCI-DSS");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -329,10 +303,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("criticalFileMonitoring", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -344,10 +316,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestMinimalThreat", SecurityProfile.DEV);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.DEV);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.DEV, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.DEV);
 
         // When: Installing threat protection rules
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -366,10 +336,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("wafRulesEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -387,10 +355,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("ddosProtectionEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -408,10 +374,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("firewallPolicyStrict", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -429,10 +393,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("continuousScanningEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -450,10 +412,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("autoPatchingEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -471,10 +431,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("egressFiltering", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -492,10 +450,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("isolatedSubnets", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -513,10 +469,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("minimumTlsVersion", "1.2");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -534,10 +488,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("behaviorAnalysisEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -555,10 +507,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("autoRemediationEnabled", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -576,10 +526,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("mfaRequired", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -597,10 +545,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("ipReputationChecking", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -618,10 +564,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("sensitiveDataDetection", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -639,10 +583,8 @@ class ThreatProtectionRulesTest {
         cfcContext.put("hostBasedFirewall", "true");
         stack.getNode().setContext("cfc", cfcContext);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.EC2,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.EC2, SecurityProfile.PRODUCTION);
 
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
     }
@@ -653,10 +595,8 @@ class ThreatProtectionRulesTest {
         App app = new App();
         Stack stack = createTestStack(app, "TestThreatIdempotent", SecurityProfile.PRODUCTION);
 
-        DeploymentContext cfc = DeploymentContext.from(stack);
-        IAMProfile iamProfile = IAMProfileMapper.mapFromSecurity(SecurityProfile.PRODUCTION);
-        SystemContext ctx = SystemContext.start(stack, TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE,
-                SecurityProfile.PRODUCTION, iamProfile, cfc);
+        SystemContext ctx = TestInfrastructureBuilder.startSystemContext(stack,
+                TopologyType.JENKINS_SERVICE, RuntimeType.FARGATE, SecurityProfile.PRODUCTION);
 
         // When: Installing rules multiple times
         assertDoesNotThrow(() -> new ThreatProtectionRules().install(ctx));
@@ -796,15 +736,11 @@ class ThreatProtectionRulesTest {
         // DEV and STAGING are always advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " " + runtime + " " + framework +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " " + runtime + " " + framework +
+                " guardDuty=" + guardDuty + " antiMalware=" + antiMalware,
+            "Expected validation to pass for: " + profile + " " + runtime + " " + framework +
                 " guardDuty=" + guardDuty + " antiMalware=" + antiMalware);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " " + runtime + " " + framework +
-                " guardDuty=" + guardDuty + " antiMalware=" + antiMalware);
-        }
     }
 
     /**
@@ -902,15 +838,11 @@ class ThreatProtectionRulesTest {
         // DEV and STAGING are always advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " " + frameworks +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " " + frameworks +
+                " guardDuty=" + guardDuty + " waf=" + waf + " flowLogs=" + flowLogs,
+            "Expected validation to pass for: " + profile + " " + frameworks +
                 " guardDuty=" + guardDuty + " waf=" + waf + " flowLogs=" + flowLogs);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " " + frameworks +
-                " guardDuty=" + guardDuty + " waf=" + waf + " flowLogs=" + flowLogs);
-        }
     }
 
     /**
@@ -989,15 +921,11 @@ class ThreatProtectionRulesTest {
         // DEV and STAGING are always advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " " + runtime + " " + framework +
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " " + runtime + " " + framework +
+                " fim=" + fim + " config=" + awsConfig,
+            "Expected validation to pass for: " + profile + " " + runtime + " " + framework +
                 " fim=" + fim + " config=" + awsConfig);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " " + runtime + " " + framework +
-                " fim=" + fim + " config=" + awsConfig);
-        }
     }
 
     /**
@@ -1165,13 +1093,9 @@ class ThreatProtectionRulesTest {
         // DEV and STAGING are always advisory, always pass
 
         // Trigger synthesis to execute validations
-        if (shouldFail) {
-            assertThrows(Exception.class, () -> Template.fromStack(builder.getStack()),
-                "Expected validation to fail for: " + profile + " " + runtime + " " + frameworks);
-        } else {
-            assertDoesNotThrow(() -> Template.fromStack(builder.getStack()),
-                "Expected validation to pass for: " + profile + " " + runtime + " " + frameworks);
-        }
+        TestInfrastructureBuilder.assertSynthesis(builder, shouldFail,
+            "Expected validation to fail for: " + profile + " " + runtime + " " + frameworks,
+            "Expected validation to pass for: " + profile + " " + runtime + " " + frameworks);
     }
 
     @Test
