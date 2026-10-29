@@ -71,6 +71,20 @@ public class MediaWikiApplicationSpec extends AbstractCmsApplicationSpec impleme
         return DEFAULT_IMAGE;
     }
 
+    /**
+     * Only the uploads persist. The official image keeps MediaWiki's code in {@code /var/www/html}, and an
+     * empty volume mounted there hides it, so Apache serves an empty directory and answers 403.
+     */
+    @Override
+    public String containerDataPath() {
+        return "/var/www/html/images";
+    }
+
+    @Override
+    public String documentRoot() {
+        return "/var/www/html";
+    }
+
     @Override
     public String healthCheckPath() {
         return "/index.php/Main_Page";
