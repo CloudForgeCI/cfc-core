@@ -48,6 +48,14 @@ public final class ManagerEnvKeys {
      *  ApplicationSpec}'s health-check command example all reference this one constant instead of
      *  repeating the literal, so a future port change can't drift out of sync in one of them. */
     public static final int SYNTH_SERVICE_DEFAULT_PORT = 8090;
+    /** Shared secret sent as {@code Authorization: Bearer <token>} on every call to the sidecar
+     *  and checked before it runs a synth — without it, {@code POST /v1/synthesize} runs CDK
+     *  synthesis under the sidecar's own task role for any caller that can reach the port, no
+     *  identity check at all. Set by {@code CloudForgeManagerApplicationSpec} to a fresh
+     *  {@code UUID.randomUUID()} per synth, delivered to both containers the same way
+     *  {@link #SETUP_TOKEN} is. Unset by default for local {@code mvn spring-boot:run}, where the
+     *  sidecar then skips the check; {@code /v1/healthz} never requires it either way. */
+    public static final String SYNTH_SERVICE_TOKEN = "SYNTH_SERVICE_TOKEN";
     public static final String AUTH_MODE = "CFC_MANAGER_AUTH_MODE";
     public static final String DB_MODE = "CFC_MANAGER_DB_MODE";
     public static final String VERSION = "CFC_MANAGER_VERSION";
